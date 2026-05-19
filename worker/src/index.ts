@@ -1,0 +1,244 @@
+import { neon } from "@neondatabase/serverless";
+
+export interface Env {
+  AIRCALL_WEBHOOK_TOKEN: string;
+  AIRCALL_API_ID: string;
+  AIRCALL_API_TOKEN: string;
+  DATABASE_URL: string;
+}
+
+interface AircallWebhookPayload {
+  token: string;
+  event: string;
+  timestamp: number;
+  data: {
+    id?: number; // en webhooks user.* `data` ES el objeto user
+    call_id?: number;
+    user?: { id?: number }; // en webhooks call.* el agente va aquí
+    [key: string]: unknown;
+  };
+}
+
+export default {
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext,
+  ): Promise<Response> {
+    const url = new URL(request.url);
+    if (url.pathname !== "/aircall/webhook") {
+      return new Response("Not Found", { status: 404 });
+    }
+    if (request.method !== "POST") {
+      return new Response("Method Not Allowed", { status: 405 });
+    }
+
+    // Parseamos el body antes de responder para poder validar y encolar
+    let body: AircallWebhookPayload;
+    try {
+      body = (await request.json()) as AircallWebhookPayload;
+    } catch {
+      console.error("invalid json body");
+      return new Response("OK", { status: 200 });
+    }
+
+    // Validación del token en tiempo constante
+    if (!timingSafeEqual(body.token ?? "", env.AIRCALL_WEBHOOK_TOKEN)) {
+      console.warn("webhook token mismatch — request ignored");
+      return new Response("OK", { status: 200 });
+    }
+
+    // ctx.waitUntil mantiene viva la promesa después de responder
+    ctx.waitUntil(insertEvent(body, env));
+
+    return new Response("OK", { status: 200 });
+  },
+
+  // Cron Trigger — reconciliación de disponibilidad cada 10 min.
+  // Awaitamos directamente: el runtime mantiene viva la invocación
+  // hasta que la promesa resuelve y propaga los errores a los logs.
+  async scheduled(
+    _controller: ScheduledController,
+    env: Env,
+  ): Promise<void> {
+    await reconcileAvailabilities(env);
+  },
+} satisfies ExportedHandler<Env>;
+
+async function insertEvent(
+  body: AircallWebhookPayload,
+  env: Env,
+): Promise<void> {
+  const eventType = body.event ?? "unknown";
+  const userId = extractUserId(body);
+  const occurredAt = new Date(body.timestamp * 1000).toISOString();
+
+  try {
+    const sql = neon(env.DATABASE_URL);
+    await sql`
+      INSERT INTO events_raw (event_type, user_id, occurred_at, payload)
+      VALUES (
+        ${eventType},
+        ${userId},
+        ${occurredAt},
+        ${JSON.stringify(body)}::jsonb
+      )
+    `;
+    console.log(
+      `stored event=${eventType} user_id=${userId} at=${occurredAt}`,
+    );
+  } catch (err) {
+    console.error("db insert failed:", err);
+  }
+}
+
+// Los webhooks user.* traen el user_id en data.id (data ES el objeto user);
+// el resto de eventos (call.*) lo traen en data.user.id.
+function extractUserId(body: AircallWebhookPayload): number | null {
+  const data = body.data;
+  if (!data) return null;
+  if ((body.event ?? "").startsWith("user.")) {
+    return typeof data.id === "number" ? data.id : null;
+  }
+  const id = data.user?.id;
+  return typeof id === "number" ? id : null;
+}
+
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+// ── Fase 2.1: reconciliación de disponibilidad ─────────────────────────────────
+
+interface AvailabilityUser {
+  id: number;
+  availabilityRaw: string; // valor granular tal cual lo devuelve el endpoint
+}
+
+interface AvailabilitiesResponse {
+  meta?: { next_page_link?: string | null };
+  users?: { id?: number; availability?: string }[];
+}
+
+const AIRCALL_AVAILABILITIES_URL =
+  "https://api.aircall.io/v1/users/availabilities?per_page=50";
+
+// Trae todas las páginas de /v1/users/availabilities siguiendo next_page_link.
+async function fetchAllAvailabilities(env: Env): Promise<AvailabilityUser[]> {
+  const auth =
+    "Basic " + btoa(`${env.AIRCALL_API_ID}:${env.AIRCALL_API_TOKEN}`);
+  const users: AvailabilityUser[] = [];
+
+  let nextUrl: string | null = AIRCALL_AVAILABILITIES_URL;
+  let pageGuard = 0;
+  while (nextUrl && pageGuard < 100) {
+    pageGuard++;
+    const res = await fetch(nextUrl, { headers: { Authorization: auth } });
+    if (!res.ok) {
+      throw new Error(
+        `Aircall API ${res.status} on ${nextUrl}: ${await res.text()}`,
+      );
+    }
+    const body = (await res.json()) as AvailabilitiesResponse;
+    for (const u of body.users ?? []) {
+      if (typeof u.id === "number" && typeof u.availability === "string") {
+        users.push({ id: u.id, availabilityRaw: u.availability });
+      }
+    }
+    nextUrl = body.meta?.next_page_link ?? null;
+  }
+  return users;
+}
+
+// El endpoint de availabilities devuelve estados granulares (available,
+// offline, do_not_disturb, in_call, after_call_work); los webhooks user.*
+// solo distinguen available/unavailable. Normalizamos para poder comparar.
+function normalizeAvailability(value: string): "available" | "unavailable" {
+  return value === "available" ? "available" : "unavailable";
+}
+
+async function reconcileAvailabilities(env: Env): Promise<void> {
+  const sql = neon(env.DATABASE_URL);
+  const users = await fetchAllAvailabilities(env);
+
+  if (users.length === 0) {
+    console.log("reconciliation: checked 0 users, 0 drifts detected");
+    return;
+  }
+
+  const userIds = users.map((u) => u.id);
+
+  // Último estado conocido por usuario en una sola query (DISTINCT ON),
+  // en lugar de N round-trips. Equivale a "el último evento user.* o
+  // reconciliation.* por user_id, ordenado por occurred_at DESC".
+  // Tanto los webhooks user.* (data ES el objeto user) como los eventos
+  // sintéticos reconciliation.* tienen el estado en data.availability_status.
+  const rows = (await sql`
+    SELECT DISTINCT ON (user_id)
+      user_id,
+      payload->'data'->>'availability_status' AS status
+    FROM events_raw
+    WHERE user_id = ANY(${userIds}::bigint[])
+      AND (event_type LIKE 'user.%' OR event_type LIKE 'reconciliation.%')
+    ORDER BY user_id, occurred_at DESC
+  `) as { user_id: number | string; status: string | null }[];
+
+  const lastKnown = new Map<number, string | null>();
+  for (const r of rows) lastKnown.set(Number(r.user_id), r.status);
+
+  // Conteo de estados crudos del endpoint, para visibilidad en los logs.
+  const rawCounts: Record<string, number> = {};
+  for (const u of users) {
+    rawCounts[u.availabilityRaw] = (rawCounts[u.availabilityRaw] ?? 0) + 1;
+  }
+
+  let drifts = 0;
+  for (const u of users) {
+    const known = lastKnown.get(u.id) ?? null;
+    // Sin histórico no hay divergencia que detectar.
+    if (known === null) continue;
+
+    const normalized = normalizeAvailability(u.availabilityRaw);
+    if (known === normalized) continue;
+
+    drifts++;
+    const nowIso = new Date().toISOString();
+    const payload = {
+      event: "reconciliation.status_drift",
+      timestamp: Math.floor(Date.now() / 1000),
+      source: "cron_reconciliation",
+      data: {
+        user_id: u.id,
+        availability_status: normalized, // normalizado, para comparaciones futuras
+        availability_raw: u.availabilityRaw, // valor granular original del endpoint
+        last_known_status: known, // último estado en events_raw
+      },
+    };
+
+    await sql`
+      INSERT INTO events_raw (event_type, user_id, occurred_at, payload)
+      VALUES (
+        'reconciliation.status_drift',
+        ${u.id},
+        ${nowIso},
+        ${JSON.stringify(payload)}::jsonb
+      )
+    `;
+    console.warn(
+      `drift user_id=${u.id} aircall=${normalized} (raw=${u.availabilityRaw}) last_known=${known}`,
+    );
+  }
+
+  const rc = (k: string): number => rawCounts[k] ?? 0;
+  console.log(
+    `reconciliation: checked ${users.length} users, ${drifts} drifts detected ` +
+      `(raw counts: available=${rc("available")}, offline=${rc("offline")}, ` +
+      `do_not_disturb=${rc("do_not_disturb")}, in_call=${rc("in_call")}, ` +
+      `after_call_work=${rc("after_call_work")})`,
+  );
+}

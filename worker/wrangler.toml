@@ -1,0 +1,14 @@
+name = "aircall-kpis-worker"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Cron de reconciliación — cada 10 minutos
+[triggers]
+crons = ["*/10 * * * *"]
+
+# Secrets — set with `wrangler secret put <NAME>`, never commit values:
+#   AIRCALL_WEBHOOK_TOKEN   (token que Aircall envía en cada webhook)
+#   AIRCALL_API_ID          (para reconciliación, fase 2)
+#   AIRCALL_API_TOKEN       (para reconciliación, fase 2)
+#   DATABASE_URL            (Neon connection string con ?sslmode=require)
