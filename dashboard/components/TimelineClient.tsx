@@ -481,7 +481,7 @@ export default function TimelineClient({
           </div>
 
           {/* Gráfico principal de Cronogramas */}
-          <div className="relative border border-slate-200 dark:border-slate-800/80 rounded-2xl p-6 bg-white dark:bg-slate-900/40 shadow-sm dark:shadow-none overflow-hidden">
+          <div className="relative border border-slate-200 dark:border-slate-800/80 rounded-2xl p-6 bg-white dark:bg-slate-900/40 shadow-sm dark:shadow-none">
             {/* Hour Labels Header */}
             <div className="grid grid-cols-[160px_1fr] gap-6 mb-4 items-center">
               <div className="text-xs font-extrabold text-slate-450 dark:text-slate-500 uppercase tracking-wider pl-2">Agente</div>
@@ -532,6 +532,23 @@ export default function TimelineClient({
                       {segments.length > 0 ? (
                         segments.map((seg, sIdx) => {
                           const { rangeStr, durationStr } = formatRange(seg.started_at, seg.ended_at);
+                          
+                          // Ajustar posicionamiento del tooltip en los bordes izquierdo/derecho para evitar recortes
+                          const isNearRight = seg.leftPct > 72;
+                          const isNearLeft = seg.leftPct < 15;
+                          
+                          const tooltipPositionClass = isNearRight 
+                            ? 'right-0 left-auto translate-x-0 items-end' 
+                            : isNearLeft 
+                              ? 'left-0 right-auto translate-x-0 items-start' 
+                              : 'left-1/2 -translate-x-1/2 right-auto items-center';
+                              
+                          const arrowPositionClass = isNearRight 
+                            ? 'mr-4' 
+                            : isNearLeft 
+                              ? 'ml-4' 
+                              : '';
+
                           return (
                             <div
                               key={sIdx}
@@ -545,7 +562,7 @@ export default function TimelineClient({
                               <div className={`w-full h-full rounded-md transition-all opacity-85 hover:opacity-100 ${getSegmentColor(seg.status, seg.substatus)}`} />
                               
                               {/* Rich float Tooltip */}
-                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 hidden group-hover:flex flex-col items-center z-50 pointer-events-none drop-shadow-xl">
+                              <div className={`absolute bottom-full mb-2.5 hidden group-hover:flex flex-col z-50 pointer-events-none drop-shadow-xl ${tooltipPositionClass}`}>
                                 <div className="bg-slate-900 dark:bg-slate-950 text-slate-100 text-[11px] font-semibold py-2 px-3 rounded-xl border border-slate-800 dark:border-slate-850/80 whitespace-nowrap leading-tight">
                                   <div className="text-white font-extrabold mb-0.5">{user.name}</div>
                                   <div className="flex items-center gap-1.5 text-slate-300 font-bold">
@@ -561,7 +578,7 @@ export default function TimelineClient({
                                   </div>
                                 </div>
                                 {/* Tooltip arrow indicator */}
-                                <div className="w-2.5 h-2.5 bg-slate-900 dark:bg-slate-950 rotate-45 -mt-1.5 border-r border-b border-slate-800 dark:border-slate-850/80" />
+                                <div className={`w-2.5 h-2.5 bg-slate-900 dark:bg-slate-950 rotate-45 -mt-1.5 border-r border-b border-slate-800 dark:border-slate-850/80 ${arrowPositionClass}`} />
                               </div>
                             </div>
                           );
