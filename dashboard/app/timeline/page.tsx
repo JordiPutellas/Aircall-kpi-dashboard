@@ -25,11 +25,10 @@ interface PageProps {
 }
 
 export default async function Page({ searchParams }: PageProps) {
-  // En Next.js 15+ searchParams es una Promise y debe ser esperada
   const resolvedSearchParams = await searchParams;
   const selectedUserId = resolvedSearchParams.user_id || null;
 
-  // 1. Obtener la lista de usuarios para el selector
+  // 1. Obtener la lista de usuarios para el selector y la visualización colectiva
   const qUsers = `
     SELECT 
       user_id::text, 
@@ -41,10 +40,21 @@ export default async function Page({ searchParams }: PageProps) {
   `;
   const users = await query<UserDb>(qUsers);
 
-  let timeline: any[] = [];
+  // 2. Obtener límites de tiempo de hoy (09:00 a 18:00 Madrid) desde la base de datos
+  const qLimits = `
+    SELECT 
+      (date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') + interval '9 hours') AT TIME ZONE 'Europe/Madrid' AS start_time,
+      (date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') + interval '18 hours') AT TIME ZONE 'Europe/Madrid' AS end_time
+  `;
+  const limitsRes = await query<{ start_time: Date; end_time: Date }>(qLimits);
+  const startLimit = limitsRes[0].start_time.toISOString();
+  const endLimit = limitsRes[0].end_time.toISOString();
 
-  // 2. Si hay un usuario seleccionado, traer sus últimos 50 intervalos
+  let timeline: any[] = [];
+  let collectiveTimeline: any[] = [];
+
   if (selectedUserId) {
+    // Caso 1: Usuario seleccionado -> Traer sus últimos 50 intervalos
     const qTimeline = `
       SELECT
         started_at,
@@ -70,6 +80,38 @@ export default async function Page({ searchParams }: PageProps) {
       substatus: interval.substatus,
       minutos: Number(interval.minutos) || 0
     }));
+  } else {
+    // Caso 2: Vista colectiva -> Traer todos los intervalos de hoy entre 09:00 y 18:00
+    const qCollective = `
+      WITH range_today AS (
+        SELECT 
+          (date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') + interval '9 hours') AT TIME ZONE 'Europe/Madrid' AS start_time,
+          (date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') + interval '18 hours') AT TIME ZONE 'Europe/Madrid' AS end_time
+      )
+      SELECT 
+        i.user_id::text,
+        i.started_at,
+        i.ended_at,
+        i.status,
+        i.substatus
+      FROM agent_status_intervals i
+      CROSS JOIN range_today r
+      WHERE i.started_at < r.end_time 
+        AND (i.ended_at IS NULL OR i.ended_at > r.start_time)
+      ORDER BY i.started_at ASC;
+    `;
+    const rawCollective = await query<any>(qCollective);
+    collectiveTimeline = rawCollective.map(interval => ({
+      user_id: interval.user_id,
+      started_at: interval.started_at instanceof Date 
+        ? interval.started_at.toISOString() 
+        : new Date(interval.started_at).toISOString(),
+      ended_at: interval.ended_at 
+        ? (interval.ended_at instanceof Date ? interval.ended_at.toISOString() : new Date(interval.ended_at).toISOString())
+        : null,
+      status: interval.status,
+      substatus: interval.substatus
+    }));
   }
 
   const lastUpdated = new Date().toLocaleTimeString('es-ES', { 
@@ -84,6 +126,9 @@ export default async function Page({ searchParams }: PageProps) {
       users={users}
       selectedUserId={selectedUserId}
       timeline={timeline}
+      collectiveTimeline={collectiveTimeline}
+      startLimit={startLimit}
+      endLimit={endLimit}
       lastUpdated={lastUpdated}
     />
   );

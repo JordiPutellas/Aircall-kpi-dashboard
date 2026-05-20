@@ -33,6 +33,8 @@ export default function WallboardClient({ initialAgents, lastUpdated }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [timeDiffs, setTimeDiffs] = useState<Record<string, number>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const handleRefresh = () => {
     startTransition(() => {
@@ -146,6 +148,18 @@ export default function WallboardClient({ initialAgents, lastUpdated }: Props) {
   ).length;
   const offlineCount = initialAgents.filter(a => a.status === 'offline').length;
 
+  const filteredAgents = initialAgents.filter(agent => {
+    const matchesSearch = 
+      agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      agent.email.toLowerCase().includes(searchQuery.toLowerCase());
+      
+    if (statusFilter === 'all') return matchesSearch;
+    if (statusFilter === 'paused') {
+      return matchesSearch && agent.status === 'unavailable' && agent.substatus && agent.substatus !== 'always_opened' && agent.substatus !== 'always_closed';
+    }
+    return matchesSearch && agent.status === statusFilter;
+  });
+
   return (
     <div className="flex-1 p-6 md:p-8 space-y-8 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
       {/* Header */}
@@ -241,15 +255,43 @@ export default function WallboardClient({ initialAgents, lastUpdated }: Props) {
 
       {/* Grid de Agentes */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-outfit font-extrabold text-lg text-slate-900 dark:text-white">Detalle de Agentes</h3>
-          <span className="text-xs text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-850 shadow-sm dark:shadow-none">
-            {initialAgents.length} agentes cargados
-          </span>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <h3 className="font-outfit font-extrabold text-lg text-slate-900 dark:text-white flex items-center gap-2">
+            Detalle de Agentes
+            <span className="text-xs font-bold text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 px-2.5 py-0.5 rounded-full border border-slate-200 dark:border-slate-850">
+              {filteredAgents.length}
+            </span>
+          </h3>
+          
+          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+            {/* Input de Búsqueda */}
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Buscar agente..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full md:w-60 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500 transition-all shadow-sm dark:shadow-none"
+              />
+            </div>
+            
+            {/* Filtro de Estado */}
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 transition-all shadow-sm dark:shadow-none cursor-pointer"
+            >
+              <option value="all">Todos los estados</option>
+              <option value="available">🟢 Disponibles</option>
+              <option value="after_call_work">🔵 En ACW</option>
+              <option value="paused">🟡 En Pausa</option>
+              <option value="offline">🔘 Offline</option>
+            </select>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          {initialAgents.map(agent => {
+          {filteredAgents.map(agent => {
             const durationSecs = timeDiffs[agent.user_id];
             const isLong = isLongPause(agent, durationSecs);
             const avatarColor = getAvatarColor(agent.name);

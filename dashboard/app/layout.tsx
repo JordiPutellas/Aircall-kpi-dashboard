@@ -15,7 +15,7 @@ export default function RootLayout({
   return (
     <html
       lang="es"
-      className="h-full antialiased dark"
+      className="h-full antialiased"
       suppressHydrationWarning
     >
       <body className="min-h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans flex flex-col md:flex-row transition-colors duration-250">
