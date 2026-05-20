@@ -61,7 +61,15 @@ export default {
     _controller: ScheduledController,
     env: Env,
   ): Promise<void> {
-    await reconcileAvailabilities(env);
+    // El transform es independiente de la reconciliación: aunque falle
+    // la llamada a la API de Aircall, queremos materializar lo que ya
+    // tengamos en events_raw.
+    try {
+      await reconcileAvailabilities(env);
+    } catch (err) {
+      console.error("reconciliation failed (transform will still run):", err);
+    }
+    await runTransform(env);
   },
 } satisfies ExportedHandler<Env>;
 
@@ -240,5 +248,27 @@ async function reconcileAvailabilities(env: Env): Promise<void> {
       `(raw counts: available=${rc("available")}, offline=${rc("offline")}, ` +
       `do_not_disturb=${rc("do_not_disturb")}, in_call=${rc("in_call")}, ` +
       `after_call_work=${rc("after_call_work")})`,
+  );
+}
+
+// ── Fase 2.2: transformación events_raw → tablas derivadas ─────────────────────
+
+interface TransformResult {
+  intervals_upserted: number;
+  calls_upserted: number;
+}
+
+// Llama a la función SQL transform_events(), que materializa
+// agent_status_intervals y calls a partir de events_raw.
+async function runTransform(env: Env): Promise<void> {
+  const sql = neon(env.DATABASE_URL);
+  const rows = (await sql`SELECT * FROM transform_events()`) as TransformResult[];
+  const r = rows[0];
+  if (!r) {
+    console.warn("transform: function returned no row");
+    return;
+  }
+  console.log(
+    `transform: ${r.intervals_upserted} intervals upserted, ${r.calls_upserted} calls upserted`,
   );
 }
