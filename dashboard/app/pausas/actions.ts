@@ -150,6 +150,9 @@ export async function getPausasDataForDateAction(dateStr: string): Promise<{
     INNER JOIN v_users u ON u.user_id = p.user_id
     WHERE (p.started_at AT TIME ZONE 'Europe/Madrid')::date = $1::date
       AND p.tipo_anomalia IN ('pausa_larga_en_horario', 'pausa_se_extiende_fuera_horario')
+      AND p.substatus NOT IN ('doing_back_office', 'out_for_lunch', 'Lunch', 'lunch')
+      AND LOWER(p.substatus) NOT LIKE '%lunch%'
+      AND LOWER(p.substatus) NOT LIKE '%back%office%'
     ORDER BY p.started_at DESC;
   `;
 
@@ -186,15 +189,21 @@ export async function getPausasDataForDateAction(dateStr: string): Promise<{
         minutos_total: Number(a.minutos_total) || 0.0,
         minutos_media: Number(a.minutos_media) || 0.0
       })),
-      pausasAnomalias: anomaliasRaw.map(an => ({
-        id: an.id,
-        name: an.name || 'Agente Desconocido',
-        motivo: an.motivo || 'other',
-        started_at: an.started_at ? new Date(an.started_at).toISOString() : '',
-        ended_at: an.ended_at ? new Date(an.ended_at).toISOString() : null,
-        duration_s: Number(an.duration_s) || 0,
-        tipo_anomalia: an.tipo_anomalia
-      }))
+      pausasAnomalias: anomaliasRaw
+        .filter(an => {
+          const mot = (an.motivo || '').toLowerCase().trim();
+          const allowedSubstatuses = ['on_a_break', 'do_not_disturb', 'other', 'break', 'descanso', 'otro', 'no molestar'];
+          return allowedSubstatuses.includes(mot);
+        })
+        .map(an => ({
+          id: an.id,
+          name: an.name || 'Agente Desconocido',
+          motivo: an.motivo || 'other',
+          started_at: an.started_at ? new Date(an.started_at).toISOString() : '',
+          ended_at: an.ended_at ? new Date(an.ended_at).toISOString() : null,
+          duration_s: Number(an.duration_s) || 0,
+          tipo_anomalia: an.tipo_anomalia
+        }))
     };
   } catch (error) {
     console.error('Error fetching pausas data for date:', error);

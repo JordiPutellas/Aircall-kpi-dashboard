@@ -121,9 +121,10 @@ export default function PausasClient({
 
   const translateReason = (reason: string | null) => {
     if (!reason) return '—';
+    const lower = reason.toLowerCase();
+    if (lower === 'out_for_lunch' || lower === 'lunch') return 'Pausa para comer 🍔';
     switch (reason) {
       case 'on_a_break': return 'Descanso ☕';
-      case 'out_for_lunch': return 'Almuerzo 🍔';
       case 'doing_back_office': return 'Back Office 📝';
       case 'in_training': return 'Formación 🎓';
       case 'other': return 'Otro ⚙️';

@@ -102,9 +102,10 @@ export default function WallboardClient({ initialAgents, lastUpdated }: Props) {
 
   const getSubstatusLabel = (substatus: string | null) => {
     if (!substatus) return null;
+    const lower = substatus.toLowerCase();
+    if (lower === 'out_for_lunch' || lower === 'lunch') return 'Pausa para comer 🍔';
     switch (substatus) {
       case 'on_a_break': return 'Descanso ☕';
-      case 'out_for_lunch': return 'Almuerzo 🍔';
       case 'doing_back_office': return 'Back Office 📝';
       case 'in_training': return 'Formación 🎓';
       case 'other': return 'Otro ⚙️';
@@ -115,8 +116,15 @@ export default function WallboardClient({ initialAgents, lastUpdated }: Props) {
   };
 
   const isLongPause = (agent: Agent, durationSeconds: number | undefined) => {
-    if (agent.status !== 'unavailable') return false;
-    if (!agent.substatus || agent.substatus === 'always_opened' || agent.substatus === 'always_closed') return false;
+    const statusLower = (agent.status || '').toLowerCase();
+    const sub = agent.substatus ? agent.substatus.toLowerCase().trim() : '';
+
+    const allowedSubstatuses = ['on_a_break', 'do_not_disturb', 'other', 'break', 'descanso', 'otro', 'no molestar'];
+    
+    const isTriggerStatus = statusLower === 'do_not_disturb' || 
+      (statusLower === 'unavailable' && allowedSubstatuses.includes(sub));
+      
+    if (!isTriggerStatus) return false;
     
     const minutes = durationSeconds !== undefined 
       ? durationSeconds / 60 

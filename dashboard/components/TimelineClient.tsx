@@ -90,9 +90,10 @@ export default function TimelineClient({
 
   const translateSubstatus = (substatus: string | null) => {
     if (!substatus) return '';
+    const lower = substatus.toLowerCase();
+    if (lower === 'out_for_lunch' || lower === 'lunch') return 'Pausa para comer 🍔';
     switch (substatus) {
       case 'on_a_break': return 'Descanso ☕';
-      case 'out_for_lunch': return 'Almuerzo 🍔';
       case 'doing_back_office': return 'Back Office 📝';
       case 'in_training': return 'Formación 🎓';
       case 'other': return 'Otro ⚙️';
@@ -107,9 +108,10 @@ export default function TimelineClient({
     if (status === 'after_call_work') return 'ACW';
     if (status === 'unavailable') {
       if (!substatus) return 'No Disponible';
+      const lower = substatus.toLowerCase();
+      if (lower === 'out_for_lunch' || lower === 'lunch') return 'Pausa para comer 🍔';
       switch (substatus) {
         case 'on_a_break': return 'Descanso ☕';
-        case 'out_for_lunch': return 'Almuerzo 🍔';
         case 'doing_back_office': return 'Back Office 📝';
         case 'in_training': return 'Formación 🎓';
         case 'other': return 'Otro ⚙️';
