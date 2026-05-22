@@ -1,3 +1,8 @@
+// Desactivar validación estricta de SSL para saltar el proxy corporativo en desarrollo local
+if (process.env.NODE_ENV === 'development') {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
+
 import { neon } from '@neondatabase/serverless';
 
 if (!process.env.DATABASE_URL) {

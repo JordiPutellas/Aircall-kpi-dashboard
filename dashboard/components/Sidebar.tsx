@@ -15,6 +15,8 @@ import ThemeToggle from './ThemeToggle';
 export default function Sidebar() {
   const pathname = usePathname();
 
+  if (pathname === '/login') return null;
+
   const getLinkClass = (path: string) => {
     const isActive = pathname === path;
     const base = "flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-xl border transition-all duration-200";
