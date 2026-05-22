@@ -100,21 +100,6 @@ export default function WallboardClient({ initialAgents, lastUpdated }: Props) {
       .toUpperCase();
   };
 
-  const getAvatarColor = (name: string) => {
-    const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const colors = [
-      'bg-pink-500/10 text-pink-500 dark:text-pink-400 border-pink-500/20 dark:border-pink-500/10',
-      'bg-purple-500/10 text-purple-500 dark:text-purple-400 border-purple-500/20 dark:border-purple-500/10',
-      'bg-indigo-500/10 text-indigo-500 dark:text-indigo-400 border-indigo-500/20 dark:border-indigo-500/10',
-      'bg-blue-500/10 text-blue-500 dark:text-blue-400 border-blue-500/20 dark:border-blue-500/10',
-      'bg-cyan-500/10 text-cyan-500 dark:text-cyan-400 border-cyan-500/20 dark:border-cyan-500/10',
-      'bg-teal-500/10 text-teal-500 dark:text-teal-400 border-teal-500/20 dark:border-teal-500/10',
-      'bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border-emerald-500/20 dark:border-emerald-500/10',
-      'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 dark:border-amber-500/10',
-    ];
-    return colors[hash % colors.length];
-  };
-
   const getSubstatusLabel = (substatus: string | null) => {
     if (!substatus) return null;
     switch (substatus) {
@@ -308,7 +293,6 @@ export default function WallboardClient({ initialAgents, lastUpdated }: Props) {
           {filteredAgents.map(agent => {
             const durationSecs = timeDiffs[agent.user_id];
             const isLong = isLongPause(agent, durationSecs);
-            const avatarColor = getAvatarColor(agent.name);
             const substatusLabel = getSubstatusLabel(agent.substatus);
 
             let badgeClasses = '';
@@ -356,7 +340,7 @@ export default function WallboardClient({ initialAgents, lastUpdated }: Props) {
                   {/* Agente Info */}
                   <div className="flex items-start gap-4">
                     {/* Avatar */}
-                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold border shrink-0 ${ringColor} ${avatarColor}`}>
+                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-sm font-semibold border shrink-0 ${ringColor}`}>
                       {getInitials(agent.name)}
                     </div>
                     {/* Info */}
