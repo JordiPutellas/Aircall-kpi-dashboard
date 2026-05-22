@@ -18,7 +18,7 @@ interface Agent {
   user_id: string;
   name: string;
   email: string;
-  status: 'available' | 'unavailable' | 'after_call_work' | 'offline';
+  status: 'available' | 'unavailable' | 'after_call_work' | 'offline' | 'in_call';
   substatus: string | null;
   desde: string | null;
   minutos_en_estado: number;
@@ -142,6 +142,7 @@ export default function WallboardClient({ initialAgents, lastUpdated }: Props) {
 
   const totalCount = initialAgents.length;
   const availableCount = initialAgents.filter(a => a.status === 'available').length;
+  const inCallCount = initialAgents.filter(a => a.status === 'in_call').length;
   const acwCount = initialAgents.filter(a => a.status === 'after_call_work').length;
   const pausedCount = initialAgents.filter(
     a => a.status === 'unavailable' && a.substatus && a.substatus !== 'always_opened' && a.substatus !== 'always_closed'
@@ -191,7 +192,7 @@ export default function WallboardClient({ initialAgents, lastUpdated }: Props) {
       </div>
 
       {/* KPI Cards Panel */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 md:gap-5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-5">
         {/* Total */}
         <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between hover-card-trigger shadow-sm dark:shadow-none">
           <div className="flex items-center justify-between text-slate-400 dark:text-slate-500">
@@ -213,6 +214,18 @@ export default function WallboardClient({ initialAgents, lastUpdated }: Props) {
           <div className="mt-4">
             <span className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 font-outfit">{availableCount}</span>
             <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold block mt-1">Listos para llamada</span>
+          </div>
+        </div>
+
+        {/* En Llamada */}
+        <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between hover-card-trigger shadow-sm dark:shadow-none">
+          <div className="flex items-center justify-between text-yellow-500 dark:text-yellow-450">
+            <span className="text-[10px] font-bold uppercase tracking-wider">En Llamada</span>
+            <PhoneCall size={18} className="animate-pulse" />
+          </div>
+          <div className="mt-4">
+            <span className="text-3xl font-extrabold text-yellow-600 dark:text-yellow-400 font-outfit">{inCallCount}</span>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold block mt-1">Hablando actualmente</span>
           </div>
         </div>
 
@@ -241,7 +254,7 @@ export default function WallboardClient({ initialAgents, lastUpdated }: Props) {
         </div>
 
         {/* Offline */}
-        <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between hover-card-trigger shadow-sm dark:shadow-none col-span-2 lg:col-span-1">
+        <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-5 flex flex-col justify-between hover-card-trigger shadow-sm dark:shadow-none">
           <div className="flex items-center justify-between text-slate-400 dark:text-slate-500">
             <span className="text-[10px] font-bold uppercase tracking-wider">Desconectados</span>
             <UserX size={18} />
@@ -283,8 +296,9 @@ export default function WallboardClient({ initialAgents, lastUpdated }: Props) {
             >
               <option value="all">Todos los estados</option>
               <option value="available">🟢 Disponibles</option>
+              <option value="in_call">📞 En Llamada</option>
               <option value="after_call_work">🔵 En ACW</option>
-              <option value="paused">🟡 En Pausa</option>
+              <option value="paused">🟠 En Pausa</option>
               <option value="offline">🔘 Offline</option>
             </select>
           </div>
@@ -300,7 +314,10 @@ export default function WallboardClient({ initialAgents, lastUpdated }: Props) {
             let badgeClasses = '';
             let ringColor = 'border-slate-200 dark:border-slate-800';
             
-            if (agent.status === 'available') {
+            if (agent.status === 'in_call') {
+              badgeClasses = 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-350 border-yellow-500/20';
+              ringColor = 'ring-2 ring-yellow-500/30 dark:ring-yellow-500/40 border-white dark:border-slate-950';
+            } else if (agent.status === 'available') {
               badgeClasses = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
               ringColor = 'ring-2 ring-emerald-500/30 dark:ring-emerald-500/40 border-white dark:border-slate-950';
             } else if (agent.status === 'after_call_work') {
@@ -357,12 +374,22 @@ export default function WallboardClient({ initialAgents, lastUpdated }: Props) {
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-semibold text-slate-400 dark:text-slate-500">Estado</span>
                       <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${badgeClasses}`}>
+                        {agent.status === 'in_call' && 'En llamada'}
                         {agent.status === 'available' && 'Disponible'}
                         {agent.status === 'after_call_work' && 'ACW'}
                         {agent.status === 'unavailable' && 'No Disponible'}
                         {agent.status === 'offline' && 'Offline'}
                       </span>
                     </div>
+
+                    {agent.status === 'in_call' && (
+                      <div className="flex items-center justify-between gap-2 bg-yellow-500/5 dark:bg-yellow-950/10 rounded-lg p-1.5 px-2.5 border border-yellow-500/10 dark:border-yellow-900/20 animate-pulse-slow">
+                        <span className="text-xs font-semibold text-slate-400 dark:text-slate-500">Actividad</span>
+                        <span className="text-xs font-bold text-yellow-600 dark:text-yellow-405">
+                          Atendiendo llamada 📞
+                        </span>
+                      </div>
+                    )}
 
                     {agent.status === 'unavailable' && substatusLabel && (
                       <div className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-950/40 rounded-lg p-1.5 px-2.5 border border-slate-150 dark:border-slate-800/30">

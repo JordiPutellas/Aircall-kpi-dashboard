@@ -16,29 +16,64 @@ interface DbAgent {
 }
 
 export default async function Page() {
-  // Query lateral para traer todos los agentes (v_users) con su último estado abierto si existe
+  // Query lateral para traer todos los agentes (v_users) con su último estado abierto si existe,
+  // evaluando si el último evento de llamada de cada agente fue un descuelgue activo (call.answered)
   const sqlQuery = `
     SELECT
       u.user_id::text,
       u.name,
       u.email,
-      COALESCE(i.status, 'offline') AS status,
-      i.substatus,
-      i.started_at AS desde,
       CASE 
-        WHEN i.started_at IS NOT NULL THEN EXTRACT(EPOCH FROM (now() - i.started_at))::int / 60 
-        ELSE 0 
+        -- Validar si el último evento de llamada fue "call.answered" (agente hablando actualmente)
+        WHEN (
+          SELECT event_type FROM events_raw 
+          WHERE user_id = u.user_id AND event_type LIKE 'call.%'
+          ORDER BY occurred_at DESC LIMIT 1
+        ) = 'call.answered' THEN 'in_call'
+        ELSE COALESCE(i.status, 'offline')
+      END AS status,
+      i.substatus,
+      CASE 
+        WHEN (
+          SELECT event_type FROM events_raw 
+          WHERE user_id = u.user_id AND event_type LIKE 'call.%'
+          ORDER BY occurred_at DESC LIMIT 1
+        ) = 'call.answered' THEN (
+          SELECT occurred_at FROM events_raw 
+          WHERE user_id = u.user_id AND event_type = 'call.answered'
+          ORDER BY occurred_at DESC LIMIT 1
+        )
+        ELSE i.started_at
+      END AS desde,
+      CASE
+        WHEN (
+          SELECT event_type FROM events_raw 
+          WHERE user_id = u.user_id AND event_type LIKE 'call.%'
+          ORDER BY occurred_at DESC LIMIT 1
+        ) = 'call.answered' THEN 
+          EXTRACT(EPOCH FROM (now() - (
+            SELECT occurred_at FROM events_raw 
+            WHERE user_id = u.user_id AND event_type = 'call.answered'
+            ORDER BY occurred_at DESC LIMIT 1
+          )))::int / 60
+        WHEN i.started_at IS NOT NULL THEN 
+          EXTRACT(EPOCH FROM (now() - i.started_at))::int / 60
+        ELSE 0
       END AS minutos_en_estado
     FROM v_users u
     LEFT JOIN LATERAL (
-      SELECT * 
+      SELECT status, substatus, started_at 
       FROM agent_status_intervals 
       WHERE user_id = u.user_id AND ended_at IS NULL
-      ORDER BY started_at DESC
-      LIMIT 1
+      ORDER BY started_at DESC LIMIT 1
     ) i ON true
     ORDER BY 
       (CASE 
+        WHEN (
+          SELECT event_type FROM events_raw 
+          WHERE user_id = u.user_id AND event_type LIKE 'call.%'
+          ORDER BY occurred_at DESC LIMIT 1
+        ) = 'call.answered' THEN 0
         WHEN COALESCE(i.status, 'offline') = 'available' THEN 1
         WHEN COALESCE(i.status, 'offline') = 'after_call_work' THEN 2
         WHEN COALESCE(i.status, 'offline') = 'unavailable' THEN 3
@@ -54,7 +89,7 @@ export default async function Page() {
     user_id: agent.user_id,
     name: agent.name || 'Agente Desconocido',
     email: agent.email || '',
-    status: agent.status as 'available' | 'unavailable' | 'after_call_work' | 'offline',
+    status: agent.status as 'available' | 'unavailable' | 'after_call_work' | 'offline' | 'in_call',
     substatus: agent.substatus,
     desde: agent.desde 
       ? (agent.desde instanceof Date ? agent.desde.toISOString() : new Date(agent.desde).toISOString()) 
