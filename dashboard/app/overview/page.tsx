@@ -162,7 +162,7 @@ export default async function Page() {
     query<LlamadaMotivoDb>(qLlamadasMotivos),
     query<AgentePerdidaDb>(qAgentesPerdidas),
     query<AhtAgenteDb>(qAht),
-    query<any>(qDetalleLlamadas)
+    query<DetalleLlamadaDb>(qDetalleLlamadas)
   ]);
 
   const resumen = resumenRaw[0] || { total: 0, atendidas: 0, perdidas_brutas: 0, perdidas: 0, tasa_atencion: 0.0 };

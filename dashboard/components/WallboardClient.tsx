@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useState, useTransition, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Users, 
@@ -36,18 +36,18 @@ export default function WallboardClient({ initialAgents, lastUpdated }: Props) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     startTransition(() => {
       router.refresh();
     });
-  };
+  }, [router]);
 
   useEffect(() => {
     const interval = setInterval(() => {
       handleRefresh();
     }, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [handleRefresh]);
 
   useEffect(() => {
     const timer = setInterval(() => {

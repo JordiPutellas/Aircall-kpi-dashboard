@@ -37,6 +37,41 @@ export interface PausaAnomalia {
   tipo_anomalia: string;
 }
 
+interface ResumenPausasDb {
+  total_pausas: number;
+  minutos_total: number;
+  minutos_media: number;
+}
+
+interface PausaTopAgenteDb {
+  name: string;
+  minutos_total: number;
+}
+
+interface PausaMotivoDb {
+  motivo: string | null;
+  num_pausas: number;
+  minutos_total: number;
+}
+
+interface PausaAgenteDb {
+  user_id: string;
+  name: string;
+  total_pausas: number;
+  minutos_total: number;
+  minutos_media: number;
+}
+
+interface PausaAnomaliaDb {
+  id: string;
+  name: string;
+  motivo: string | null;
+  started_at: Date | string | null;
+  ended_at: Date | string | null;
+  duration_s: number;
+  tipo_anomalia: string;
+}
+
 /**
  * Server Action para obtener todos los datos de pausas para una fecha específica (YYYY-MM-DD)
  */
@@ -120,11 +155,11 @@ export async function getPausasDataForDateAction(dateStr: string): Promise<{
 
   try {
     const [resumenRaw, topAgenteRaw, motivosRaw, agentesPausasRaw, anomaliasRaw] = await Promise.all([
-      query<any>(qResumen, [dateStr]),
-      query<any>(qTopAgente, [dateStr]),
-      query<any>(qMotivos, [dateStr]),
-      query<any>(qAgentesPausas, [dateStr]),
-      query<any>(qAnomalias, [dateStr])
+      query<ResumenPausasDb>(qResumen, [dateStr]),
+      query<PausaTopAgenteDb>(qTopAgente, [dateStr]),
+      query<PausaMotivoDb>(qMotivos, [dateStr]),
+      query<PausaAgenteDb>(qAgentesPausas, [dateStr]),
+      query<PausaAnomaliaDb>(qAnomalias, [dateStr])
     ]);
 
     const resumen = resumenRaw[0] || { total_pausas: 0, minutos_total: 0.0, minutos_media: 0.0 };

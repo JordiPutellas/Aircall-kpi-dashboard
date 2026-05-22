@@ -92,9 +92,9 @@ export default function OverviewClient({
   const [currentResumen, setCurrentResumen] = useState<Resumen>(resumen);
   const [currentLlamadasHora, setCurrentLlamadasHora] = useState<LlamadaHora[]>(llamadasHora);
   const [lastUpdatedTime, setLastUpdatedTime] = useState(lastUpdated);
-  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMounted(true);
   }, []);
 
@@ -133,7 +133,6 @@ export default function OverviewClient({
   const handleDateChange = async (dateStr: string) => {
     setSelectedDate(dateStr);
     setSelectedAgentId(null); // Reiniciar selección para evitar estados inconsistentes
-    setIsLoading(true);
     try {
       const data = await getLossesForDateAction(dateStr);
       setAgentesPerdidas(data.agentesPerdidas);
@@ -153,15 +152,7 @@ export default function OverviewClient({
       }
     } catch (error) {
       console.error('Error al cambiar de fecha:', error);
-    } finally {
-      setIsLoading(false);
     }
-  };
-
-  const formatSeconds = (sec: number) => {
-    const hrs = Math.floor(sec / 3600);
-    const mins = Math.floor((sec % 3600) / 60);
-    return hrs > 0 ? `${hrs}h ${mins}m` : `${mins} min`;
   };
 
   const formatDurationHumana = (sec: number) => {

@@ -6,9 +6,7 @@ import {
   Clock, 
   AlertOctagon, 
   Hourglass,
-  TrendingUp,
-  Calendar,
-  AlertTriangle
+  TrendingUp
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -61,6 +59,7 @@ export default function PausasClient({
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMounted(true);
   }, []);
 
@@ -161,7 +160,7 @@ export default function PausasClient({
         minute: '2-digit',
         hour12: false
       });
-    } catch (e) {
+    } catch {
       return '—';
     }
   };

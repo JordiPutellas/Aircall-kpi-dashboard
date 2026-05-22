@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -10,8 +11,7 @@ import {
   Calendar,
   ChevronRight,
   Sparkles,
-  Users,
-  Info
+  Users
 } from 'lucide-react';
 
 interface UserInfo {
@@ -44,6 +44,7 @@ interface Props {
   startLimit?: string;
   endLimit?: string;
   lastUpdated: string;
+  nowMs: number;
 }
 
 export default function TimelineClient({
@@ -53,7 +54,8 @@ export default function TimelineClient({
   collectiveTimeline = [],
   startLimit,
   endLimit,
-  lastUpdated
+  lastUpdated,
+  nowMs
 }: Props) {
   const router = useRouter();
   const [selectedUser, setSelectedUser] = useState(selectedUserId || '');
@@ -166,7 +168,7 @@ export default function TimelineClient({
     return { rangeStr, durationStr };
   };
 
-  const mergeContiguousIntervals = (intervals: any[]) => {
+  const mergeContiguousIntervals = (intervals: any[], nowMs: number) => {
     if (intervals.length === 0) return [];
     
     const sorted = [...intervals].sort((a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime());
@@ -177,7 +179,7 @@ export default function TimelineClient({
     for (let i = 1; i < sorted.length; i++) {
       const next = sorted[i];
       
-      const currentEnd = current.ended_at ? new Date(current.ended_at).getTime() : Date.now();
+      const currentEnd = current.ended_at ? new Date(current.ended_at).getTime() : nowMs;
       const nextStart = new Date(next.started_at).getTime();
       
       const sameState = current.status === next.status && current.substatus === next.substatus;
@@ -185,8 +187,8 @@ export default function TimelineClient({
       const isContiguous = gapMs <= 5 * 60 * 1000; // Umbral de 5 minutos
       
       if (sameState && isContiguous) {
-        const nextEndVal = next.ended_at ? new Date(next.ended_at).getTime() : Date.now();
-        const currentEndVal = current.ended_at ? new Date(current.ended_at).getTime() : Date.now();
+        const nextEndVal = next.ended_at ? new Date(next.ended_at).getTime() : nowMs;
+        const currentEndVal = current.ended_at ? new Date(current.ended_at).getTime() : nowMs;
         const newEndMs = Math.max(currentEndVal, nextEndVal);
         
         current.ended_at = next.ended_at === null || current.ended_at === null 
@@ -203,7 +205,7 @@ export default function TimelineClient({
   };
 
   // Procesar intervalos de la vista colectiva para un agente específico
-  const processAgentSegments = (userId: string) => {
+  const processAgentSegments = (userId: string, nowMs: number) => {
     if (!collectiveTimeline || !startLimit || !endLimit) return [];
     
     const startLimitMs = new Date(startLimit).getTime();
@@ -211,14 +213,14 @@ export default function TimelineClient({
     const totalDurationMs = endLimitMs - startLimitMs;
 
     const agentIntervals = collectiveTimeline.filter(i => i.user_id === userId);
-    const mergedIntervals = mergeContiguousIntervals(agentIntervals);
+    const mergedIntervals = mergeContiguousIntervals(agentIntervals, nowMs);
 
     return mergedIntervals
       .map(interval => {
         // Cliquear y truncar los intervalos dentro de la ventana de 09:00 a 18:00
         const start = Math.max(new Date(interval.started_at).getTime(), startLimitMs);
         const end = Math.min(
-          interval.ended_at ? new Date(interval.ended_at).getTime() : Date.now(),
+          interval.ended_at ? new Date(interval.ended_at).getTime() : nowMs,
           endLimitMs
         );
 
@@ -283,7 +285,7 @@ export default function TimelineClient({
             <option value="">-- Ver Todos los Agentes --</option>
             {users.map((user) => (
               <option key={user.user_id} value={user.user_id} className="text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-950">
-                {user.name} ({user.email})
+                {user.name}
               </option>
             ))}
           </select>
@@ -513,7 +515,7 @@ export default function TimelineClient({
 
               {/* Rows */}
               {users.map((user) => {
-                const segments = processAgentSegments(user.user_id);
+                const segments = processAgentSegments(user.user_id, nowMs);
 
                 return (
                   <div key={user.user_id} className="grid grid-cols-[160px_1fr] gap-6 items-center group/row relative z-10 py-0.5">

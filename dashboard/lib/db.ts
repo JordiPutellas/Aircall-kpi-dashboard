@@ -1,4 +1,5 @@
 // Desactivar validación estricta de SSL para saltar el proxy corporativo en desarrollo local
+/* eslint-disable @typescript-eslint/no-explicit-any */
 if (process.env.NODE_ENV === 'development') {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 }

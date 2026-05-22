@@ -18,6 +18,30 @@ interface IntervaloDb {
   minutos: number;
 }
 
+interface Intervalo {
+  started_at: string;
+  ended_at: string | null;
+  status: string;
+  substatus: string | null;
+  minutos: number;
+}
+
+interface IntervaloColectivo {
+  user_id: string;
+  started_at: string;
+  ended_at: string | null;
+  status: string;
+  substatus: string | null;
+}
+
+interface CollectiveDb {
+  user_id: string;
+  started_at: Date | string;
+  ended_at: Date | string | null;
+  status: string;
+  substatus: string | null;
+}
+
 interface PageProps {
   searchParams: Promise<{
     user_id?: string;
@@ -50,8 +74,8 @@ export default async function Page({ searchParams }: PageProps) {
   const startLimit = limitsRes[0].start_time.toISOString();
   const endLimit = limitsRes[0].end_time.toISOString();
 
-  let timeline: any[] = [];
-  let collectiveTimeline: any[] = [];
+  let timeline: Intervalo[] = [];
+  let collectiveTimeline: IntervaloColectivo[] = [];
 
   if (selectedUserId) {
     // Caso 1: Usuario seleccionado -> Traer sus últimos 50 intervalos
@@ -100,7 +124,7 @@ export default async function Page({ searchParams }: PageProps) {
         AND (i.ended_at IS NULL OR i.ended_at > r.start_time)
       ORDER BY i.started_at ASC;
     `;
-    const rawCollective = await query<any>(qCollective);
+    const rawCollective = await query<CollectiveDb>(qCollective);
     collectiveTimeline = rawCollective.map(interval => ({
       user_id: interval.user_id,
       started_at: interval.started_at instanceof Date 
@@ -130,6 +154,8 @@ export default async function Page({ searchParams }: PageProps) {
       startLimit={startLimit}
       endLimit={endLimit}
       lastUpdated={lastUpdated}
+      // eslint-disable-next-line react-hooks/purity
+      nowMs={Date.now()}
     />
   );
 }
