@@ -24,67 +24,17 @@ export default async function Page() {
       u.name, 
       u.email,
       CASE 
-        WHEN (
-          SELECT occurred_at FROM events_raw 
-          WHERE user_id = u.user_id AND event_type = 'call.answered'
-          ORDER BY occurred_at DESC LIMIT 1
-        ) > COALESCE((
-          SELECT occurred_at FROM events_raw 
-          WHERE user_id = u.user_id AND event_type IN ('call.ended', 'call.hungup')
-          ORDER BY occurred_at DESC LIMIT 1
-        ), '1970-01-01'::timestamptz)
-        AND (
-          SELECT occurred_at FROM events_raw 
-          WHERE user_id = u.user_id AND event_type = 'call.answered'
-          ORDER BY occurred_at DESC LIMIT 1
-        ) > now() - interval '4 hours'
-        THEN 'in_call'
+        WHEN ac.occurred_at IS NOT NULL THEN 'in_call'
         ELSE COALESCE(i.status, 'offline')
       END AS status,
       i.substatus,
       CASE 
-        WHEN (
-          SELECT occurred_at FROM events_raw 
-          WHERE user_id = u.user_id AND event_type = 'call.answered'
-          ORDER BY occurred_at DESC LIMIT 1
-        ) > COALESCE((
-          SELECT occurred_at FROM events_raw 
-          WHERE user_id = u.user_id AND event_type IN ('call.ended', 'call.hungup')
-          ORDER BY occurred_at DESC LIMIT 1
-        ), '1970-01-01'::timestamptz)
-        AND (
-          SELECT occurred_at FROM events_raw 
-          WHERE user_id = u.user_id AND event_type = 'call.answered'
-          ORDER BY occurred_at DESC LIMIT 1
-        ) > now() - interval '4 hours'
-        THEN (
-          SELECT occurred_at FROM events_raw 
-          WHERE user_id = u.user_id AND event_type = 'call.answered'
-          ORDER BY occurred_at DESC LIMIT 1
-        )
+        WHEN ac.occurred_at IS NOT NULL THEN ac.occurred_at
         ELSE i.started_at
       END AS desde,
       CASE
-        WHEN (
-          SELECT occurred_at FROM events_raw 
-          WHERE user_id = u.user_id AND event_type = 'call.answered'
-          ORDER BY occurred_at DESC LIMIT 1
-        ) > COALESCE((
-          SELECT occurred_at FROM events_raw 
-          WHERE user_id = u.user_id AND event_type IN ('call.ended', 'call.hungup')
-          ORDER BY occurred_at DESC LIMIT 1
-        ), '1970-01-01'::timestamptz)
-        AND (
-          SELECT occurred_at FROM events_raw 
-          WHERE user_id = u.user_id AND event_type = 'call.answered'
-          ORDER BY occurred_at DESC LIMIT 1
-        ) > now() - interval '4 hours'
-        THEN 
-          EXTRACT(EPOCH FROM (now() - (
-            SELECT occurred_at FROM events_raw 
-            WHERE user_id = u.user_id AND event_type = 'call.answered'
-            ORDER BY occurred_at DESC LIMIT 1
-          )))::int / 60
+        WHEN ac.occurred_at IS NOT NULL THEN 
+          EXTRACT(EPOCH FROM (now() - ac.occurred_at))::int / 60
         WHEN i.started_at IS NOT NULL THEN 
           EXTRACT(EPOCH FROM (now() - i.started_at))::int / 60
         ELSE 0
@@ -96,23 +46,26 @@ export default async function Page() {
       WHERE user_id = u.user_id AND ended_at IS NULL
       ORDER BY started_at DESC LIMIT 1
     ) i ON true
+    LEFT JOIN LATERAL (
+      SELECT a.occurred_at 
+      FROM events_raw a
+      WHERE a.user_id = u.user_id
+        AND a.event_type = 'call.answered'
+        AND a.occurred_at > now() - interval '4 hours'
+        AND NOT EXISTS (
+          SELECT 1 
+          FROM events_raw e
+          WHERE e.user_id = u.user_id
+            AND e.event_type IN ('call.ended', 'call.hungup')
+            AND e.occurred_at > a.occurred_at
+            AND e.occurred_at > now() - interval '4 hours'
+        )
+      ORDER BY a.occurred_at DESC
+      LIMIT 1
+    ) ac ON true
     ORDER BY 
       (CASE 
-        WHEN (
-          SELECT occurred_at FROM events_raw 
-          WHERE user_id = u.user_id AND event_type = 'call.answered'
-          ORDER BY occurred_at DESC LIMIT 1
-        ) > COALESCE((
-          SELECT occurred_at FROM events_raw 
-          WHERE user_id = u.user_id AND event_type IN ('call.ended', 'call.hungup')
-          ORDER BY occurred_at DESC LIMIT 1
-        ), '1970-01-01'::timestamptz)
-        AND (
-          SELECT occurred_at FROM events_raw 
-          WHERE user_id = u.user_id AND event_type = 'call.answered'
-          ORDER BY occurred_at DESC LIMIT 1
-        ) > now() - interval '4 hours'
-        THEN 0
+        WHEN ac.occurred_at IS NOT NULL THEN 0
         WHEN COALESCE(i.status, 'offline') = 'available' THEN 1
         WHEN COALESCE(i.status, 'offline') = 'after_call_work' THEN 2
         WHEN COALESCE(i.status, 'offline') = 'unavailable' THEN 3
