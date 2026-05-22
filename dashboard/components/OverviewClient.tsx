@@ -5,22 +5,7 @@ import {
   PhoneCall, 
   PhoneOff, 
   Percent, 
-  Award,
 } from 'lucide-react';
-import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  BarChart,
-  Bar,
-  Cell,
-  PieChart,
-  Pie,
-  Legend
-} from 'recharts';
 import { getLossesForDateAction, getTodayKpiSummaryAction, LossRecord, AgentLossSummary } from '@/app/overview/actions';
 
 interface Resumen {
@@ -31,29 +16,8 @@ interface Resumen {
   tasa_atencion: number;
 }
 
-interface LlamadaHora {
-  hora: number;
-  perdidas: number;
-}
-
-interface LlamadaMotivo {
-  missed_reason: string;
-  num_llamadas: number;
-  pct: number;
-  categoria: 'ACCIONABLE' | 'CONTEXTUAL';
-}
-
-interface AhtAgente {
-  name: string;
-  llamadas_atendidas: number;
-  aht_minutos: number;
-}
-
 interface Props {
   resumen: Resumen;
-  llamadasHora: LlamadaHora[];
-  llamadasMotivos: LlamadaMotivo[];
-  ahtAgentes: AhtAgente[];
   agentesPerdidas: AgentLossSummary[];
   detalleLlamadas: LossRecord[];
   lastUpdated: string;
@@ -73,15 +37,10 @@ const getMadridTodayString = () => {
 
 export default function OverviewClient({
   resumen,
-  llamadasHora,
-  llamadasMotivos,
-  ahtAgentes,
   agentesPerdidas: initialAgentesPerdidas,
   detalleLlamadas: initialDetalleLlamadas,
   lastUpdated
 }: Props) {
-  const [isMounted, setIsMounted] = useState(false);
-
   // Estados interactivos para el selector de fecha, registro y auditoría
   const [selectedDate, setSelectedDate] = useState(getMadridTodayString());
   const [agentesPerdidas, setAgentesPerdidas] = useState<AgentLossSummary[]>(initialAgentesPerdidas);
@@ -90,13 +49,7 @@ export default function OverviewClient({
 
   // Estados de métricas principales
   const [currentResumen, setCurrentResumen] = useState<Resumen>(resumen);
-  const [currentLlamadasHora, setCurrentLlamadasHora] = useState<LlamadaHora[]>(llamadasHora);
   const [lastUpdatedTime, setLastUpdatedTime] = useState(lastUpdated);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setIsMounted(true);
-  }, []);
 
   // Intervalo de auto-refresco de 60 segundos si la fecha seleccionada es el día de hoy
   useEffect(() => {
@@ -114,7 +67,6 @@ export default function OverviewClient({
         setAgentesPerdidas(lossesData.agentesPerdidas);
         setDetalleLlamadas(lossesData.detalleLlamadas);
         setCurrentResumen(todayKpis.resumen);
-        setCurrentLlamadasHora(todayKpis.llamadasHora);
         setLastUpdatedTime(new Date().toLocaleTimeString('es-ES', { 
           timeZone: 'Europe/Madrid',
           hour: '2-digit',
@@ -138,11 +90,10 @@ export default function OverviewClient({
       setAgentesPerdidas(data.agentesPerdidas);
       setDetalleLlamadas(data.detalleLlamadas);
 
-      // Si volvemos al día de hoy, refrescamos también los KPIs principales y gráfico de horas para hoy
+      // Si volvemos al día de hoy, refrescamos también los KPIs principales para hoy
       if (dateStr === getMadridTodayString()) {
         const todayKpis = await getTodayKpiSummaryAction();
         setCurrentResumen(todayKpis.resumen);
-        setCurrentLlamadasHora(todayKpis.llamadasHora);
         setLastUpdatedTime(new Date().toLocaleTimeString('es-ES', { 
           timeZone: 'Europe/Madrid',
           hour: '2-digit',
@@ -161,78 +112,7 @@ export default function OverviewClient({
     return `${mins}m ${secs}s`;
   };
 
-  const getReasonCategory = (reason: string): 'ACCIONABLE' | 'CONTEXTUAL' => {
-    if (reason === 'agents_did_not_answer' || reason === 'no_available_agent') {
-      return 'ACCIONABLE';
-    }
-    return 'CONTEXTUAL';
-  };
-
-  const translateReason = (reason: string) => {
-    const isAccionable = getReasonCategory(reason) === 'ACCIONABLE';
-    const prefix = isAccionable ? '🔴 [ACCIONABLE] ' : '⚪ [CONTEXTUAL] ';
-    let name = reason;
-    switch (reason) {
-      case 'no_available_agent':
-      case 'no_agent_available':
-        name = 'Sin agentes disponibles';
-        break;
-      case 'agents_did_not_answer':
-        name = 'Agentes no contestaron';
-        break;
-      case 'out_of_opening_hours': 
-        name = 'Fuera de horario'; 
-        break;
-      case 'short_abandoned': 
-        name = 'Abandono rápido'; 
-        break;
-      case 'abandoned_in_classic':
-      case 'abandoned_in_classic_ring': 
-        name = 'Abandono en cola'; 
-        break;
-      case 'abandoned_in_ivr': 
-        name = 'Abandono en IVR'; 
-        break;
-      default:
-        name = reason.replace(/_/g, ' ');
-        break;
-    }
-    return prefix + name;
-  };
-
-  const getReasonColor = (reason: string) => {
-    const category = getReasonCategory(reason);
-    if (category === 'ACCIONABLE') {
-      return reason === 'agents_did_not_answer' ? '#ef4444' : '#f59e0b';
-    } else {
-      switch (reason) {
-        case 'out_of_opening_hours': return '#334155'; // Slate-700
-        case 'short_abandoned': return '#475569'; // Slate-600
-        case 'abandoned_in_classic':
-        case 'abandoned_in_classic_ring': return '#64748b'; // Slate-500
-        case 'abandoned_in_ivr': return '#94a3b8'; // Slate-400
-        default: return '#1e293b'; // Slate-850
-      }
-    }
-  };
-
-  // Agente estrella (mejor AHT y atención)
-  const mejorAht = [...ahtAgentes]
-    .filter(a => a.llamadas_atendidas > 0)
-    .sort((a, b) => a.aht_minutos - b.aht_minutos)[0];
-
-  const datosTortaMotivos = llamadasMotivos.map((m) => ({
-    name: translateReason(m.missed_reason),
-    value: Number(m.num_llamadas),
-    rawReason: m.missed_reason
-  }));
-
-  const datosHoras = currentLlamadasHora.map(h => ({
-    hora: `${String(h.hora).padStart(2, '0')}:00`,
-    perdidas: h.perdidas
-  }));
-
-  const BAR_COLORS = ['#06b6d4', '#0891b2', '#0e7490', '#155e75', '#164e63'];
+  // Eliminadas funciones auxiliares de motivos de pérdidas y AHT
 
   return (
     <div className="flex-1 p-6 md:p-8 space-y-8 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
@@ -243,7 +123,7 @@ export default function OverviewClient({
             Overview Diario y KPIs
           </h2>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
-            Métricas de atención al cliente acumuladas hoy y analíticas históricas de rendimiento de agentes.
+            Métricas de atención al cliente acumuladas hoy y auditoría de pérdidas por agente.
           </p>
         </div>
         <div className="text-right sm:block hidden">
@@ -305,131 +185,7 @@ export default function OverviewClient({
         </div>
       </div>
 
-      {/* Gráficos de Llamadas Perdidas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Curva de Perdidas por hora (Hoy) */}
-        <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-6 flex flex-col shadow-sm dark:shadow-none">
-          <h3 className="font-outfit font-extrabold text-base text-slate-900 dark:text-white mb-4">Llamadas Perdidas por Hora (Hoy)</h3>
-          <div className="h-72 w-full flex-1 flex items-center justify-center">
-            {isMounted ? (
-              datosHoras.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={datosHoras} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
-                    <XAxis dataKey="hora" stroke="#475569" fontSize={11} tickLine={false} />
-                    <YAxis stroke="#475569" fontSize={11} tickLine={false} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '12px' }}
-                      labelStyle={{ color: '#94a3b8', fontWeight: 'bold' }}
-                      itemStyle={{ color: '#ef4444' }}
-                      formatter={(value) => [`${value} llamadas`, 'Perdidas Operativas']}
-                    />
-                    <Area type="monotone" dataKey="perdidas" stroke="#ef4444" fill="rgba(239, 68, 68, 0.15)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <p className="text-slate-400 dark:text-slate-500 text-sm">Sin llamadas perdidas operativas hoy</p>
-              )
-            ) : (
-              <p className="text-slate-400 dark:text-slate-500 text-sm">Cargando gráfico...</p>
-            )}
-          </div>
-        </div>
 
-        {/* Distribución por Motivos de Perdidas (Torta) */}
-        <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-6 flex flex-col shadow-sm dark:shadow-none">
-          <h3 className="font-outfit font-extrabold text-base text-slate-900 dark:text-white mb-4">Motivos de Llamadas Perdidas (Últimos 7 Días)</h3>
-          <div className="h-72 w-full flex-1 flex items-center justify-center">
-            {isMounted ? (
-              datosTortaMotivos.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={datosTortaMotivos}
-                      cx="50%"
-                      cy="45%"
-                      innerRadius={60}
-                      outerRadius={90}
-                      paddingAngle={3}
-                      dataKey="value"
-                    >
-                      {datosTortaMotivos.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={getReasonColor(entry.rawReason)} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '12px' }}
-                      itemStyle={{ color: '#e2e8f0' }}
-                      formatter={(value) => [`${value} llamadas`, 'Total']}
-                    />
-                    <Legend 
-                      verticalAlign="bottom" 
-                      height={36} 
-                      iconType="circle"
-                      iconSize={8}
-                      wrapperStyle={{ fontSize: '11px', color: '#64748b' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <p className="text-slate-400 dark:text-slate-500 text-sm">Sin datos de llamadas perdidas</p>
-              )
-            ) : (
-              <p className="text-slate-400 dark:text-slate-500 text-sm">Cargando gráfico...</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Grid de Rendimiento de Agentes */}
-      <div className="grid grid-cols-1 gap-6">
-        {/* AHT (Media de minutos por llamada - Últimos 7 días) */}
-        <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-6 flex flex-col shadow-sm dark:shadow-none">
-          <h3 className="font-outfit font-extrabold text-base text-slate-900 dark:text-white mb-4">AHT por Agente (Últimos 7 Días)</h3>
-          
-          <div className="h-72 w-full flex-1 flex items-center justify-center mb-4">
-            {isMounted ? (
-              ahtAgentes.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={ahtAgentes.slice(0, 5)} layout="vertical" margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                    <XAxis type="number" stroke="#475569" fontSize={11} tickLine={false} />
-                    <YAxis type="category" dataKey="name" stroke="#475569" fontSize={11} tickLine={false} width={120} />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '12px' }}
-                      itemStyle={{ color: '#38bdf8' }}
-                      formatter={(value) => [`${value} minutos`, 'Duración Media']}
-                    />
-                    <Bar dataKey="aht_minutos" fill="#06b6d4" radius={[0, 4, 4, 0]}>
-                      {ahtAgentes.slice(0, 5).map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <p className="text-slate-400 dark:text-slate-500 text-sm">Sin llamadas atendidas en los últimos 7 días</p>
-              )
-            ) : (
-              <p className="text-slate-400 dark:text-slate-500 text-sm">Cargando gráfico...</p>
-            )}
-          </div>
-
-          {/* Destacado Mejor AHT */}
-          {mejorAht && (
-            <div className="bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 rounded-xl p-4 flex items-center gap-3">
-              <div className="p-2.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-xl border border-indigo-500/20 shrink-0">
-                <Award size={18} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">AHT más eficiente</p>
-                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{mejorAht.name}</h4>
-                <p className="text-xs text-indigo-600 dark:text-indigo-400 font-bold mt-0.5">
-                  {mejorAht.aht_minutos} min / llamada ({mejorAht.llamadas_atendidas} atendidas)
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Auditoría de Pérdidas por Agente */}
       <div className="bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm dark:shadow-none">

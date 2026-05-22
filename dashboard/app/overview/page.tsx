@@ -13,24 +13,6 @@ interface ResumenDb {
   tasa_atencion: number | null;
 }
 
-interface LlamadaHoraDb {
-  hora: number;
-  perdidas: number;
-}
-
-interface LlamadaMotivoDb {
-  missed_reason: string;
-  num_llamadas: number;
-  pct: number;
-  categoria: 'ACCIONABLE' | 'CONTEXTUAL';
-}
-
-interface AhtAgenteDb {
-  name: string;
-  llamadas_atendidas: number;
-  aht_minutos: number;
-}
-
 interface AgentePerdidaDb {
   user_id: string;
   name: string;
@@ -77,56 +59,7 @@ export default async function Page() {
     CROSS JOIN stats_perdidas_reales spr;
   `;
 
-  // 2. Llamadas perdidas por hora hoy (consumiendo de v_perdidas_reales)
-  const qLlamadasHora = `
-    SELECT
-      EXTRACT(HOUR FROM COALESCE(started_at, ended_at) AT TIME ZONE 'Europe/Madrid')::int AS hora,
-      COUNT(*)::int AS perdidas
-    FROM v_perdidas_reales
-    WHERE COALESCE(started_at, ended_at) >= date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid'
-      AND COALESCE(started_at, ended_at) < date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid' + interval '1 day'
-    GROUP BY hora
-    ORDER BY hora;
-  `;
-
-  // 3. Motivos de llamadas perdidas últimos 7 días (categorizando ACCIONABLE vs CONTEXTUAL)
-  const qLlamadasMotivos = `
-    SELECT
-      missed_reason,
-      COUNT(*)::int AS num_llamadas,
-      ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1)::float AS pct,
-      CASE 
-        WHEN missed_reason IN ('agents_did_not_answer', 'no_available_agent') THEN 'ACCIONABLE' 
-        ELSE 'CONTEXTUAL' 
-      END AS categoria
-    FROM calls
-    WHERE answered_at IS NULL
-      AND missed_reason IS NOT NULL
-      AND COALESCE(started_at, ended_at) >= now() - interval '7 days'
-    GROUP BY missed_reason
-    ORDER BY num_llamadas DESC;
-  `;
-
-  // 4. AHT últimos 7 días
-  const qAht = `
-    SELECT
-      u.name,
-      COUNT(*)::int AS llamadas_atendidas,
-      ROUND(
-        AVG(EXTRACT(EPOCH FROM (ended_at - answered_at))) / 60.0,
-        1
-      )::float AS aht_minutos
-    FROM calls c
-    LEFT JOIN v_users u ON u.user_id = c.agent_id
-    WHERE c.answered_at IS NOT NULL
-      AND c.ended_at IS NOT NULL
-      AND c.answered_at >= now() - interval '7 days'
-      AND u.name IS NOT NULL
-    GROUP BY u.name
-    ORDER BY aht_minutos DESC;
-  `;
-
-  // 5. Conteo de pérdidas operativas reales por agente hoy
+  // 2. Conteo de pérdidas operativas reales por agente hoy
   const qAgentesPerdidas = `
     SELECT 
       u.user_id::text, 
@@ -140,7 +73,7 @@ export default async function Page() {
     ORDER BY perdidas_hoy DESC, u.name ASC;
   `;
 
-  // 6. Detalle de todas las llamadas perdidas reales de hoy
+  // 3. Detalle de todas las llamadas perdidas reales de hoy
   const qDetalleLlamadas = `
     SELECT 
       c.call_id::text, 
@@ -156,12 +89,9 @@ export default async function Page() {
   `;
 
   // Ejecución concurrente de las consultas
-  const [resumenRaw, llamadasHora, llamadasMotivos, agentesPerdidasRaw, ahtAgentes, detalleLlamadasRaw] = await Promise.all([
+  const [resumenRaw, agentesPerdidasRaw, detalleLlamadasRaw] = await Promise.all([
     query<ResumenDb>(qResumen),
-    query<LlamadaHoraDb>(qLlamadasHora),
-    query<LlamadaMotivoDb>(qLlamadasMotivos),
     query<AgentePerdidaDb>(qAgentesPerdidas),
-    query<AhtAgenteDb>(qAht),
     query<DetalleLlamadaDb>(qDetalleLlamadas)
   ]);
 
@@ -198,9 +128,6 @@ export default async function Page() {
         perdidas: Number(resumen.perdidas) || 0,
         tasa_atencion: Number(resumen.tasa_atencion) || 0.0
       }}
-      llamadasHora={llamadasHora}
-      llamadasMotivos={llamadasMotivos}
-      ahtAgentes={ahtAgentes}
       agentesPerdidas={agentesPerdidas}
       detalleLlamadas={detalleLlamadas}
       lastUpdated={lastUpdated}

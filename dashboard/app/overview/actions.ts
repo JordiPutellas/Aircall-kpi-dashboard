@@ -112,23 +112,8 @@ export async function getTodayKpiSummaryAction() {
     CROSS JOIN stats_perdidas_reales spr;
   `;
 
-  const qLlamadasHora = `
-    SELECT
-      EXTRACT(HOUR FROM COALESCE(started_at, ended_at) AT TIME ZONE 'Europe/Madrid')::int AS hora,
-      COUNT(*)::int AS perdidas
-    FROM v_perdidas_reales
-    WHERE COALESCE(started_at, ended_at) >= date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid'
-      AND COALESCE(started_at, ended_at) < date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid' + interval '1 day'
-    GROUP BY hora
-    ORDER BY hora;
-  `;
-
   try {
-    const [resumenRaw, llamadasHora] = await Promise.all([
-      query(qResumen),
-      query(qLlamadasHora)
-    ]);
-
+    const resumenRaw = await query(qResumen);
     const resumen = resumenRaw[0] || { total: 0, atendidas: 0, perdidas_brutas: 0, perdidas: 0, tasa_atencion: 0.0 };
 
     return {
@@ -138,11 +123,7 @@ export async function getTodayKpiSummaryAction() {
         perdidas_brutas: Number(resumen.perdidas_brutas) || 0,
         perdidas: Number(resumen.perdidas) || 0,
         tasa_atencion: Number(resumen.tasa_atencion) || 0.0
-      },
-      llamadasHora: llamadasHora.map(h => ({
-        hora: Number(h.hora),
-        perdidas: Number(h.perdidas)
-      }))
+      }
     };
   } catch (error) {
     console.error('Error fetching today KPI summary:', error);
