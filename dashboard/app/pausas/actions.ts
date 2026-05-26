@@ -89,7 +89,7 @@ export async function getPausasDataForDateAction(dateStr: string): Promise<{
       COALESCE(SUM(duracion_recortada_s) / 60.0, 0.0)::float AS minutos_total,
       COALESCE(AVG(duracion_recortada_s) / 60.0, 0.0)::float AS minutos_media
     FROM v_pausas_operativas
-    WHERE (started_at AT TIME ZONE 'Europe/Madrid')::date = $1::date;
+    WHERE madrid_local(started_at)::date = $1::date;
   `;
 
   // 2. Top Agente por pausas operativas legítimas
@@ -99,7 +99,7 @@ export async function getPausasDataForDateAction(dateStr: string): Promise<{
       COALESCE(SUM(p.duracion_recortada_s) / 60.0, 0.0)::float AS minutos_total
     FROM v_pausas_operativas p
     INNER JOIN v_users u ON u.user_id = p.user_id
-    WHERE (p.started_at AT TIME ZONE 'Europe/Madrid')::date = $1::date
+    WHERE madrid_local(p.started_at)::date = $1::date
       AND u.name != 'Preventa Team'
     GROUP BY u.name
     ORDER BY minutos_total DESC
@@ -113,7 +113,7 @@ export async function getPausasDataForDateAction(dateStr: string): Promise<{
       COUNT(*)::int AS num_pausas,
       COALESCE(SUM(duracion_recortada_s) / 60.0, 0.0)::float AS minutos_total
     FROM v_pausas_operativas
-    WHERE (started_at AT TIME ZONE 'Europe/Madrid')::date = $1::date
+    WHERE madrid_local(started_at)::date = $1::date
     GROUP BY substatus
     ORDER BY minutos_total DESC;
   `;
@@ -128,9 +128,9 @@ export async function getPausasDataForDateAction(dateStr: string): Promise<{
       COALESCE(AVG(p.duracion_recortada_s) / 60.0, 0.0)::float AS minutos_media
     FROM v_pausas_operativas p
     INNER JOIN v_users u ON u.user_id = p.user_id
-    WHERE (p.started_at AT TIME ZONE 'Europe/Madrid')::date = $1::date
-      AND (p.started_at AT TIME ZONE 'Europe/Madrid')::time >= '09:00:00'
-      AND (p.started_at AT TIME ZONE 'Europe/Madrid')::time <= '18:00:00'
+    WHERE madrid_local(p.started_at)::date = $1::date
+      AND madrid_local(p.started_at)::time >= '09:00:00'
+      AND madrid_local(p.started_at)::time <= '18:00:00'
       AND u.name != 'Preventa Team'
     GROUP BY u.user_id, u.name
     ORDER BY minutos_total DESC;
@@ -148,7 +148,7 @@ export async function getPausasDataForDateAction(dateStr: string): Promise<{
       p.tipo_anomalia
     FROM v_pausas_anomalias p
     INNER JOIN v_users u ON u.user_id = p.user_id
-    WHERE (p.started_at AT TIME ZONE 'Europe/Madrid')::date = $1::date
+    WHERE madrid_local(p.started_at)::date = $1::date
       AND p.tipo_anomalia IN ('pausa_larga_en_horario', 'pausa_se_extiende_fuera_horario')
       AND p.substatus NOT IN ('doing_back_office', 'out_for_lunch', 'Lunch', 'lunch')
       AND LOWER(p.substatus) NOT LIKE '%lunch%'
