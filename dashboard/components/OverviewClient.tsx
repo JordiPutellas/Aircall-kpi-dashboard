@@ -320,8 +320,16 @@ export default function OverviewClient({
                               <td className="py-2.5 font-mono text-slate-800 dark:text-slate-200">
                                 {timeStr}
                               </td>
-                              <td className="py-2.5 font-mono text-slate-500 dark:text-slate-400">
-                                {loss.call_id}
+                              <td className="py-2.5 font-mono">
+                                <a
+                                  href={`https://dashboard.aircall.io/calls/${loss.call_id}/timeline`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-indigo-600 dark:text-indigo-400 hover:underline"
+                                  title="Abrir la llamada en Aircall"
+                                >
+                                  {loss.call_id}
+                                </a>
                               </td>
                               <td className="py-2.5">
                                 {loss.missed_reason === 'agents_did_not_answer' ? (
