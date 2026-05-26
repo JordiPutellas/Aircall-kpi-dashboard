@@ -13,17 +13,8 @@
 -- 0. VIEW HELPER — dimensión de usuarios
 -- ============================================================
 -- Última versión conocida del nombre/email de cada user_id.
--- Crea la view una vez. Cualquier query luego puede hacer JOIN.
-
-CREATE OR REPLACE VIEW v_users AS
-SELECT DISTINCT ON (user_id)
-  user_id,
-  payload->'data'->>'name'  AS name,
-  payload->'data'->>'email' AS email
-FROM events_raw
-WHERE event_type LIKE 'user.%'
-  AND user_id IS NOT NULL
-ORDER BY user_id, occurred_at DESC;
+-- La definición canónica vive en migrations/004_create_views.sql (incluye la
+-- exclusión de cuentas no-agente). No la dupliques aquí.
 
 
 -- ============================================================
