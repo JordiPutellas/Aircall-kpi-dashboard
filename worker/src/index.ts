@@ -112,11 +112,13 @@ function extractUserId(body: AircallWebhookPayload): number | null {
   return typeof id === "number" ? id : null;
 }
 
+// Comparación en tiempo constante. Iteramos siempre sobre la longitud del
+// secreto (b) para no filtrar la longitud del token vía timing: una diferencia
+// de longitud se refleja en `diff` sin provocar un return anticipado.
 function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  let diff = a.length ^ b.length;
+  for (let i = 0; i < b.length; i++) {
+    diff |= (i < a.length ? a.charCodeAt(i) : 0) ^ b.charCodeAt(i);
   }
   return diff === 0;
 }
@@ -146,7 +148,12 @@ async function fetchAllAvailabilities(env: Env): Promise<AvailabilityUser[]> {
   let pageGuard = 0;
   while (nextUrl && pageGuard < 100) {
     pageGuard++;
-    const res = await fetch(nextUrl, { headers: { Authorization: auth } });
+    // Timeout por request: sin esto, una llamada colgada consumiría el
+    // límite de CPU del Worker (~30s) y tumbaría todo el ciclo del cron.
+    const res = await fetch(nextUrl, {
+      headers: { Authorization: auth },
+      signal: AbortSignal.timeout(10_000),
+    });
     if (!res.ok) {
       throw new Error(
         `Aircall API ${res.status} on ${nextUrl}: ${await res.text()}`,
