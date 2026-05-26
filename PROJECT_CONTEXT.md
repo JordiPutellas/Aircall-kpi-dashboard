@@ -103,18 +103,19 @@ Aircall webhooks ──► Cloudflare Worker ──► Neon Postgres
 
 ---
 
-## 4. Lo que estamos construyendo AHORA: Fase 2.3b — Dashboard en Next.js + Vercel
+## 4. Fase 2.3b — Dashboard en Next.js + Vercel (CONSTRUIDO)
 
 **Decisión tomada:** dashboard custom en Next.js desplegado en Vercel (free tier).
 Razones: cero coste, control total sobre la UX, oportunidad de aprender Next/React,
 y porque las queries SQL ya están listas para consumirse desde la app.
 
-**Lo que NO se ha empezado todavía:**
+**Estado actual (ya construido y en producción):**
 
-- No hay carpeta de Next.js en el repo
-- No hay configuración de Vercel
-- No hay conexión desde la app a Neon
-- No hay ningún componente UI
+- App Next.js en `dashboard/` (App Router, Next 16, React 19, Tailwind v4, Recharts)
+- Conexión server-side a Neon vía `@neondatabase/serverless` en `dashboard/lib/db.ts`
+- Auth básica por contraseña (middleware + cookie de sesión)
+- Páginas: Wallboard (`/`), Overview, Pausas, Timeline, Login
+- Desplegado en Vercel conectado al repo
 
 **Requisitos para el dashboard:**
 
@@ -348,7 +349,9 @@ Orden recomendado para construir Next.js + Vercel:
 - 152 llamadas perdidas registradas en los últimos 7 días con motivos desglosados.
 - 0 intervalos rotos tras el último fix.
 - Cron corriendo cada 10 min sin errores.
-- Próximo paso pendiente: **crear el dashboard Next.js**.
+- Dashboard Next.js **construido y desplegado** en Vercel (Wallboard, Overview, Pausas, Timeline, Login).
+- Deuda pendiente: las vistas `v_perdidas_reales`, `v_pausas_operativas` y `v_pausas_anomalias`
+  que consume el dashboard **solo existen en Neon**; falta versionarlas en `migrations/`.
 
 Si necesitas verificar algo de la BBDD, pídeme que ejecute la query en Neon y te paso el resultado. Si necesitas verificar algo del Worker, puedo lanzar `npx wrangler tail` y reportarte logs.
 
