@@ -67,8 +67,8 @@ export default async function Page({ searchParams }: PageProps) {
   // 2. Obtener límites de tiempo de hoy (09:00 a 18:00 Madrid) desde la base de datos
   const qLimits = `
     SELECT 
-      (date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') + interval '9 hours') AT TIME ZONE 'Europe/Madrid' AS start_time,
-      (date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') + interval '18 hours') AT TIME ZONE 'Europe/Madrid' AS end_time
+      madrid_work_start(now()) AS start_time,
+      madrid_work_end(now()) AS end_time
   `;
   const limitsRes = await query<{ start_time: Date; end_time: Date }>(qLimits);
   const startLimit = limitsRes[0].start_time.toISOString();
@@ -109,8 +109,8 @@ export default async function Page({ searchParams }: PageProps) {
     const qCollective = `
       WITH range_today AS (
         SELECT 
-          (date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') + interval '9 hours') AT TIME ZONE 'Europe/Madrid' AS start_time,
-          (date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') + interval '18 hours') AT TIME ZONE 'Europe/Madrid' AS end_time
+          madrid_work_start(now()) AS start_time,
+          madrid_work_end(now()) AS end_time
       )
       SELECT 
         i.user_id::text,

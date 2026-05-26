@@ -32,8 +32,8 @@ export async function getLossesForDateAction(dateStr: string): Promise<{
       COUNT(c.call_id)::int AS perdidas_hoy
     FROM v_users u
     LEFT JOIN v_perdidas_reales c ON c.agent_id = u.user_id
-      AND COALESCE(c.started_at, c.ended_at) >= date_trunc('day', $1::timestamptz AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid'
-      AND COALESCE(c.started_at, c.ended_at) < date_trunc('day', $1::timestamptz AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid' + interval '1 day'
+      AND COALESCE(c.started_at, c.ended_at) >= madrid_day_start($1::timestamptz)
+      AND COALESCE(c.started_at, c.ended_at) < madrid_day_end($1::timestamptz)
     GROUP BY u.user_id, u.name
     ORDER BY perdidas_hoy DESC, u.name ASC;
   `;
@@ -47,8 +47,8 @@ export async function getLossesForDateAction(dateStr: string): Promise<{
       c.duration_s, 
       c.agent_id::text
     FROM v_perdidas_reales c
-    WHERE COALESCE(c.started_at, c.ended_at) >= date_trunc('day', $1::timestamptz AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid'
-      AND COALESCE(c.started_at, c.ended_at) < date_trunc('day', $1::timestamptz AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid' + interval '1 day'
+    WHERE COALESCE(c.started_at, c.ended_at) >= madrid_day_start($1::timestamptz)
+      AND COALESCE(c.started_at, c.ended_at) < madrid_day_end($1::timestamptz)
     ORDER BY COALESCE(c.started_at, c.ended_at) DESC;
   `;
 
@@ -90,14 +90,14 @@ export async function getTodayKpiSummaryAction() {
         COUNT(*) FILTER (WHERE answered_at IS NOT NULL)::int AS atendidas,
         COUNT(*) FILTER (WHERE answered_at IS NULL)::int AS perdidas_brutas
       FROM calls
-      WHERE COALESCE(started_at, ended_at) >= date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid'
-        AND COALESCE(started_at, ended_at) < date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid' + interval '1 day'
+      WHERE COALESCE(started_at, ended_at) >= madrid_day_start(now())
+        AND COALESCE(started_at, ended_at) < madrid_day_end(now())
     ),
     stats_perdidas_reales AS (
       SELECT COUNT(*)::int AS perdidas_reales
       FROM v_perdidas_reales
-      WHERE COALESCE(started_at, ended_at) >= date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid'
-        AND COALESCE(started_at, ended_at) < date_trunc('day', now() AT TIME ZONE 'Europe/Madrid') AT TIME ZONE 'Europe/Madrid' + interval '1 day'
+      WHERE COALESCE(started_at, ended_at) >= madrid_day_start(now())
+        AND COALESCE(started_at, ended_at) < madrid_day_end(now())
     )
     SELECT
       sc.total,
