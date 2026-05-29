@@ -90,7 +90,7 @@ export default function PausasClient({
       } catch (error) {
         console.error('Error refreshing real-time pauses data:', error);
       }
-    }, 60000);
+    }, 180000);
 
     return () => clearInterval(interval);
   }, [selectedDate]);
