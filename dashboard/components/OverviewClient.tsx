@@ -51,7 +51,7 @@ export default function OverviewClient({
   const [currentResumen, setCurrentResumen] = useState<Resumen>(resumen);
   const [lastUpdatedTime, setLastUpdatedTime] = useState(lastUpdated);
 
-  // Intervalo de auto-refresco de 60 segundos si la fecha seleccionada es el día de hoy
+  // Intervalo de auto-refresco de 3 minutos si la fecha seleccionada es el día de hoy
   useEffect(() => {
     if (selectedDate !== getMadridTodayString()) {
       return;
@@ -76,7 +76,7 @@ export default function OverviewClient({
       } catch (error) {
         console.error('Error al actualizar datos en tiempo real:', error);
       }
-    }, 60000);
+    }, 180000);
 
     return () => clearInterval(interval);
   }, [selectedDate]);
