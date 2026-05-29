@@ -14,7 +14,8 @@ Un dashboard analítico y de monitoreo en tiempo real diseñado como una alterna
 ```mermaid
 graph TD
     A[Aircall Webhooks] -->|Eventos en Tiempo Real| B[Cloudflare Worker API]
-    C[Cron Trigger CF 10m] -->|Reconciliación de Presencia| B
+    C1[Cron L-V 7-17 UTC] -->|1. Reconciliar & Transformar| B
+    C2[Cron Diario 04:00 UTC] -->|2. Limpiar events_raw > 14d| B
     B -->|Escritura de payload crudo| D[(Neon Postgres: events_raw)]
     D -->|Proceso de Transformación| E[transform_events SQL Job]
     E -->|Materialización incremental| F[(agent_status_intervals)]
@@ -23,9 +24,11 @@ graph TD
     H -->|Refresco auto 60s / Query local Madrid| I[Supervisor Client]
 ```
 
-El sistema opera con dos fases clave para asegurar la consistencia y reducir el impacto del pooling API:
-1. **Ingesta en Tiempo Real**: Los eventos `user.*` y `call.*` enviados por Aircall son capturados de forma inmediata por el Worker y almacenados en `events_raw`.
-2. **Reconciliación y Transformación**: Un Cron Trigger consulta la disponibilidad de los agentes mediante la API pública de Aircall cada 10 minutos, corrige posibles desviaciones de red insertando eventos sintéticos y ejecuta el job `transform_events()` para materializar los intervalos de presencia y llamadas.
+El sistema opera con tres procesos automáticos clave diseñados para garantizar la consistencia de los datos y optimizar el consumo de recursos de la base de datos (manteniendo el proyecto dentro del **Free Tier** de Neon):
+
+1. **Ingesta en Tiempo Real**: Los webhooks de Aircall envían eventos `user.*` y `call.*` que el Worker procesa criptográficamente al instante y almacena de forma inmutable en `events_raw`.
+2. **Reconciliación y Transformación Laboral (`*/10 7-17 * * 1-5`)**: Un Cron Trigger que se ejecuta cada 10 minutos exclusivamente de **Lunes a Viernes de 07:00 a 17:00 UTC** (cubriendo la jornada de 09:00 a 18:00 de Madrid) consulta la API pública de Aircall para alinear posibles desvíos y corre el job `transform_events()` para materializar intervalos de presencia y llamadas. Esto permite que la base de datos Neon hiberne automáticamente fuera de horario laboral, reduciendo el consumo de cómputo en un ~70%.
+3. **Limpieza Automática y Retención (`0 4 * * *`)**: Un Cron Trigger diario a las 04:00 UTC elimina todos los registros crudos de `events_raw` que tengan más de **14 días**. Dado que los reportes de rendimiento y pausas se leen de las tablas derivadas (`agent_status_intervals` y `calls`), esta limpieza previene que el almacenamiento de la base de datos supere el límite gratuito de 0.5 GB.
 
 ---
 
