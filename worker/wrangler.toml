@@ -3,9 +3,12 @@ main = "src/index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-# Cron de reconciliación — cada 10 minutos
+# Cron de reconciliación — cada 10 minutos en horario laboral L-V.
+# 7-17 UTC cubre 09:00-18:00 Europe/Madrid en ambos cambios de horario
+# (verano: 09-19 Madrid; invierno: 08-18 Madrid). La cron de CF Workers
+# va en UTC y no maneja DST, por eso se deja una hora de margen.
 [triggers]
-crons = ["*/10 * * * *"]
+crons = ["*/10 7-17 * * 1-5"]
 
 # Secrets — set with `wrangler secret put <NAME>`, never commit values:
 #   AIRCALL_WEBHOOK_TOKEN   (token que Aircall envía en cada webhook)
