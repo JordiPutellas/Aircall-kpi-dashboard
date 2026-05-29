@@ -54,13 +54,19 @@ export default {
     return new Response("OK", { status: 200 });
   },
 
-  // Cron Trigger — reconciliación de disponibilidad cada 10 min.
+  // Cron Triggers — dos schedules, distinguidos por controller.cron:
+  //   "*/10 7-17 * * 1-5"  → reconciliación + transform en horario laboral
+  //   "0 4 * * *"          → limpieza diaria de events_raw por edad
   // Awaitamos directamente: el runtime mantiene viva la invocación
   // hasta que la promesa resuelve y propaga los errores a los logs.
   async scheduled(
-    _controller: ScheduledController,
+    controller: ScheduledController,
     env: Env,
   ): Promise<void> {
+    if (controller.cron === "0 4 * * *") {
+      await cleanupOldEvents(env);
+      return;
+    }
     // El transform es independiente de la reconciliación: aunque falle
     // la llamada a la API de Aircall, queremos materializar lo que ya
     // tengamos en events_raw.
@@ -278,4 +284,20 @@ async function runTransform(env: Env): Promise<void> {
   console.log(
     `transform: ${r.intervals_upserted} intervals upserted, ${r.calls_upserted} calls upserted`,
   );
+}
+
+// ── Fase 2.3: retención por edad en events_raw ─────────────────────────────────
+
+// Borra eventos crudos > 14 días. Las tablas derivadas (agent_status_intervals,
+// calls) no se tocan: conservan todo el histórico para el dashboard. La
+// fuente de verdad para re-correr transform_events() se mantiene en los
+// últimos 14 días, suficiente para operación normal.
+async function cleanupOldEvents(env: Env): Promise<void> {
+  const sql = neon(env.DATABASE_URL);
+  const rows = (await sql`
+    DELETE FROM events_raw
+    WHERE occurred_at < now() - interval '14 days'
+    RETURNING 1
+  `) as { "?column?": number }[];
+  console.log(`cleanup: deleted ${rows.length} events older than 14 days`);
 }
