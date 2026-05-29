@@ -7,8 +7,11 @@ compatibility_flags = ["nodejs_compat"]
 # 7-17 UTC cubre 09:00-18:00 Europe/Madrid en ambos cambios de horario
 # (verano: 09-19 Madrid; invierno: 08-18 Madrid). La cron de CF Workers
 # va en UTC y no maneja DST, por eso se deja una hora de margen.
+#
+# El segundo cron (04:00 UTC diario) dispara la limpieza por edad de
+# events_raw — el handler `scheduled` distingue por `controller.cron`.
 [triggers]
-crons = ["*/10 7-17 * * 1-5"]
+crons = ["*/10 7-17 * * 1-5", "0 4 * * *"]
 
 # Secrets — set with `wrangler secret put <NAME>`, never commit values:
 #   AIRCALL_WEBHOOK_TOKEN   (token que Aircall envía en cada webhook)
