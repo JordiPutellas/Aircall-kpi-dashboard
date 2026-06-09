@@ -39,6 +39,7 @@ interface IntervaloColectivo {
 interface Props {
   users: UserInfo[];
   selectedUserId: string | null;
+  selectedDate: string;
   timeline: Intervalo[];
   collectiveTimeline?: IntervaloColectivo[];
   startLimit?: string;
@@ -50,6 +51,7 @@ interface Props {
 export default function TimelineClient({
   users,
   selectedUserId,
+  selectedDate,
   timeline,
   collectiveTimeline = [],
   startLimit,
@@ -60,14 +62,37 @@ export default function TimelineClient({
   const router = useRouter();
   const [selectedUser, setSelectedUser] = useState(selectedUserId || '');
 
+  const getMadridTodayString = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' });
+
+  // Navega preservando user_id y date; cualquiera de los dos puede sobreescribirse.
+  const navigate = (next: { userId?: string; date?: string }) => {
+    const userId = next.userId !== undefined ? next.userId : selectedUser;
+    const date = next.date !== undefined ? next.date : selectedDate;
+    const params = new URLSearchParams();
+    if (userId) params.set('user_id', userId);
+    // Solo añadimos date si no es hoy, para mantener la URL limpia por defecto.
+    if (date && date !== getMadridTodayString()) params.set('date', date);
+    const qs = params.toString();
+    router.push(qs ? `/timeline?${qs}` : '/timeline');
+  };
+
   const handleUserChange = (userId: string) => {
     setSelectedUser(userId);
-    if (userId) {
-      router.push(`/timeline?user_id=${userId}`);
-    } else {
-      router.push('/timeline');
-    }
+    navigate({ userId });
   };
+
+  const handleDateChange = (date: string) => {
+    navigate({ date });
+  };
+
+  const isToday = selectedDate === getMadridTodayString();
+  const selectedDateLabel = isToday
+    ? 'hoy'
+    : new Date(`${selectedDate}T00:00:00`).toLocaleDateString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
 
   const translateStatus = (status: string) => {
     switch (status) {
@@ -278,19 +303,31 @@ export default function TimelineClient({
           <p className="text-xs text-slate-500">Selecciona un agente de la lista para ver su historial de estados e intervalos recientes.</p>
         </div>
         
-        <div className="w-full md:w-80">
-          <select
-            value={selectedUser}
-            onChange={(e) => handleUserChange(e.target.value)}
-            className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-sm dark:shadow-none"
-          >
-            <option value="">-- Ver Todos los Agentes --</option>
-            {users.map((user) => (
-              <option key={user.user_id} value={user.user_id} className="text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-950">
-                {user.name}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <div className="w-full sm:w-80">
+            <select
+              value={selectedUser}
+              onChange={(e) => handleUserChange(e.target.value)}
+              className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-sm dark:shadow-none"
+            >
+              <option value="">-- Ver Todos los Agentes --</option>
+              {users.map((user) => (
+                <option key={user.user_id} value={user.user_id} className="text-slate-900 dark:text-slate-200 bg-white dark:bg-slate-950">
+                  {user.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="w-full sm:w-auto">
+            <input
+              type="date"
+              value={selectedDate}
+              max={getMadridTodayString()}
+              onChange={(e) => handleDateChange(e.target.value)}
+              aria-label="Filtrar por fecha"
+              className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-850 rounded-xl px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-indigo-500 transition-all cursor-pointer shadow-sm dark:shadow-none"
+            />
+          </div>
         </div>
       </div>
 
@@ -352,7 +389,7 @@ export default function TimelineClient({
                 <div>
                   <h4 className="font-outfit font-bold text-sm text-slate-800 dark:text-white">Auditoría Completa</h4>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                    Este log lista las últimas 50 transiciones registradas por la integración de Aircall en las tablas de estado de agentes, con clipping y orden cronológico inverso.
+                    Este log lista las transiciones del día seleccionado (máx. 50) registradas por la integración de Aircall en las tablas de estado de agentes, en orden cronológico inverso.
                   </p>
                 </div>
               </div>
@@ -363,7 +400,7 @@ export default function TimelineClient({
           <div className="xl:col-span-2 bg-white dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-6 shadow-sm dark:shadow-none">
             <h3 className="font-outfit font-extrabold text-base text-slate-900 dark:text-white mb-6 flex items-center gap-2">
               <Calendar size={16} className="text-slate-400" />
-              Secuencia de Transiciones (Últimas 50)
+              Secuencia de Transiciones ({selectedDateLabel === 'hoy' ? 'hoy' : selectedDateLabel})
             </h3>
 
             {timeline.length > 0 ? (
@@ -458,7 +495,7 @@ export default function TimelineClient({
               <div>
                 <h3 className="font-outfit font-extrabold text-base text-slate-900 dark:text-white">Panel Colectivo de Estados</h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Visualización y distribución del tiempo hoy entre las **09:00** y las **18:00**.
+                  Visualización y distribución del tiempo {isToday ? 'hoy' : `del ${selectedDateLabel}`} entre las 09:00 y las 18:00.
                 </p>
               </div>
             </div>
