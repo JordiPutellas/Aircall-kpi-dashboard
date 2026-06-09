@@ -45,6 +45,7 @@ interface CollectiveDb {
 interface PageProps {
   searchParams: Promise<{
     user_id?: string;
+    date?: string;
   }>;
 }
 
@@ -52,25 +53,29 @@ export default async function Page({ searchParams }: PageProps) {
   const resolvedSearchParams = await searchParams;
   const selectedUserId = resolvedSearchParams.user_id || null;
 
+  // Fecha seleccionada (YYYY-MM-DD en zona Europe/Madrid). Por defecto, hoy.
+  const defaultDateStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' });
+  const selectedDate = resolvedSearchParams.date || defaultDateStr;
+
   // 1. Obtener la lista de usuarios para el selector y la visualización colectiva
   const qUsers = `
-    SELECT 
-      user_id::text, 
-      name, 
-      email 
-    FROM v_users 
+    SELECT
+      user_id::text,
+      name,
+      email
+    FROM v_users
     WHERE name IS NOT NULL
     ORDER BY name ASC;
   `;
   const users = await query<UserDb>(qUsers);
 
-  // 2. Obtener límites de tiempo de hoy (09:00 a 18:00 Madrid) desde la base de datos
+  // 2. Obtener límites de tiempo del día seleccionado (09:00 a 18:00 Madrid)
   const qLimits = `
-    SELECT 
-      madrid_work_start(now()) AS start_time,
-      madrid_work_end(now()) AS end_time
+    SELECT
+      madrid_work_start($1::date::timestamptz) AS start_time,
+      madrid_work_end($1::date::timestamptz) AS end_time
   `;
-  const limitsRes = await query<{ start_time: Date; end_time: Date }>(qLimits);
+  const limitsRes = await query<{ start_time: Date; end_time: Date }>(qLimits, [selectedDate]);
   const startLimit = limitsRes[0].start_time.toISOString();
   const endLimit = limitsRes[0].end_time.toISOString();
 
@@ -78,7 +83,7 @@ export default async function Page({ searchParams }: PageProps) {
   let collectiveTimeline: IntervaloColectivo[] = [];
 
   if (selectedUserId) {
-    // Caso 1: Usuario seleccionado -> Traer sus últimos 50 intervalos
+    // Caso 1: Usuario seleccionado -> Traer sus intervalos del día seleccionado
     const qTimeline = `
       SELECT
         started_at,
@@ -88,16 +93,18 @@ export default async function Page({ searchParams }: PageProps) {
         ROUND(duration_s / 60.0, 1)::float AS minutos
       FROM agent_status_intervals
       WHERE user_id = $1::bigint
+        AND started_at < madrid_day_end($2::date::timestamptz)
+        AND COALESCE(ended_at, now()) > madrid_day_start($2::date::timestamptz)
       ORDER BY started_at DESC
       LIMIT 50;
     `;
-    const rawTimeline = await query<IntervaloDb>(qTimeline, [selectedUserId]);
+    const rawTimeline = await query<IntervaloDb>(qTimeline, [selectedUserId, selectedDate]);
 
     timeline = rawTimeline.map(interval => ({
-      started_at: interval.started_at instanceof Date 
-        ? interval.started_at.toISOString() 
+      started_at: interval.started_at instanceof Date
+        ? interval.started_at.toISOString()
         : new Date(interval.started_at).toISOString(),
-      ended_at: interval.ended_at 
+      ended_at: interval.ended_at
         ? (interval.ended_at instanceof Date ? interval.ended_at.toISOString() : new Date(interval.ended_at).toISOString())
         : null,
       status: interval.status,
@@ -105,32 +112,32 @@ export default async function Page({ searchParams }: PageProps) {
       minutos: Number(interval.minutos) || 0
     }));
   } else {
-    // Caso 2: Vista colectiva -> Traer todos los intervalos de hoy entre 09:00 y 18:00
+    // Caso 2: Vista colectiva -> Traer todos los intervalos del día entre 09:00 y 18:00
     const qCollective = `
-      WITH range_today AS (
-        SELECT 
-          madrid_work_start(now()) AS start_time,
-          madrid_work_end(now()) AS end_time
+      WITH range_sel AS (
+        SELECT
+          madrid_work_start($1::date::timestamptz) AS start_time,
+          madrid_work_end($1::date::timestamptz) AS end_time
       )
-      SELECT 
+      SELECT
         i.user_id::text,
         i.started_at,
         i.ended_at,
         i.status,
         i.substatus
       FROM agent_status_intervals i
-      CROSS JOIN range_today r
-      WHERE i.started_at < r.end_time 
+      CROSS JOIN range_sel r
+      WHERE i.started_at < r.end_time
         AND (i.ended_at IS NULL OR i.ended_at > r.start_time)
       ORDER BY i.started_at ASC;
     `;
-    const rawCollective = await query<CollectiveDb>(qCollective);
+    const rawCollective = await query<CollectiveDb>(qCollective, [selectedDate]);
     collectiveTimeline = rawCollective.map(interval => ({
       user_id: interval.user_id,
-      started_at: interval.started_at instanceof Date 
-        ? interval.started_at.toISOString() 
+      started_at: interval.started_at instanceof Date
+        ? interval.started_at.toISOString()
         : new Date(interval.started_at).toISOString(),
-      ended_at: interval.ended_at 
+      ended_at: interval.ended_at
         ? (interval.ended_at instanceof Date ? interval.ended_at.toISOString() : new Date(interval.ended_at).toISOString())
         : null,
       status: interval.status,
@@ -138,7 +145,7 @@ export default async function Page({ searchParams }: PageProps) {
     }));
   }
 
-  const lastUpdated = new Date().toLocaleTimeString('es-ES', { 
+  const lastUpdated = new Date().toLocaleTimeString('es-ES', {
     timeZone: 'Europe/Madrid',
     hour: '2-digit',
     minute: '2-digit',
@@ -149,6 +156,7 @@ export default async function Page({ searchParams }: PageProps) {
     <TimelineClient
       users={users}
       selectedUserId={selectedUserId}
+      selectedDate={selectedDate}
       timeline={timeline}
       collectiveTimeline={collectiveTimeline}
       startLimit={startLimit}
