@@ -5,8 +5,12 @@
 
 -- ── v_users ────────────────────────────────────────────────────────────────────
 -- Última versión conocida de nombre/email por user_id. Excluye cuentas que no
--- son agentes individuales y distorsionan métricas (cuenta compartida y un alta
--- que no opera). Sustituye a la definición de queries/analytics.sql.
+-- son agentes individuales y distorsionan métricas: cuenta compartida, altas que
+-- no operan, y team leads (que tienen usuario pero no deben figurar en el panel).
+-- Los TL se filtran con ILIKE tolerante a acentos/mayúsculas: el comodín '%'
+-- cubre la vocal acentuada o no (Jiménez/Jimenez) y el par á-ñ (Ibáñez/Ibanez),
+-- de forma agnóstica al encoding.
+-- Sustituye a la definición de queries/analytics.sql.
 CREATE OR REPLACE VIEW v_users AS
 SELECT DISTINCT ON (user_id)
   user_id,
@@ -16,6 +20,9 @@ FROM events_raw
 WHERE event_type LIKE 'user.%'
   AND user_id IS NOT NULL
   AND (payload->'data'->>'name') <> ALL (ARRAY['Preventa Team', 'Alba Cabanas'])
+  AND (payload->'data'->>'name') NOT ILIKE 'Claudia Jim%nez'
+  AND (payload->'data'->>'name') NOT ILIKE 'Queralt Ib%ez'
+  AND (payload->'data'->>'name') NOT ILIKE 'Mohammed%'
 ORDER BY user_id, occurred_at DESC;
 
 
