@@ -8,10 +8,15 @@ compatibility_flags = ["nodejs_compat"]
 # (verano: 09-19 Madrid; invierno: 08-18 Madrid). La cron de CF Workers
 # va en UTC y no maneja DST, por eso se deja una hora de margen.
 #
+# ⚠️ Día de la semana en Cloudflare: 1 = DOMINGO ... 7 = sábado (distinto del
+# cron estándar). Un rango numérico "1-5" significa domingo-jueves y dejó el
+# cron muerto los viernes (incidente 12-jun-2026). Usamos nombres MON-FRI,
+# que la propia doc de CF recomienda para evitar esta ambigüedad.
+#
 # El segundo cron (04:00 UTC diario) dispara la limpieza por edad de
 # events_raw — el handler `scheduled` distingue por `controller.cron`.
 [triggers]
-crons = ["*/10 7-17 * * 1-5", "0 4 * * *"]
+crons = ["*/10 7-17 * * MON-FRI", "0 4 * * *"]
 
 # Secrets — set with `wrangler secret put <NAME>`, never commit values:
 #   AIRCALL_WEBHOOK_TOKEN   (token que Aircall envía en cada webhook)
